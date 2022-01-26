@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from common import NYU40_IGNORE_LABEL
-from panoptic_mapping_evaluation.metrics_3d import (
+from panoptic_mapping_evaluation.metrics import (
     mean_iou,
     panoptic_reconstruction_quality,
 )

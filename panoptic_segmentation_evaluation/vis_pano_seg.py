@@ -120,7 +120,7 @@ def decode_single_channel_pano_seg(single_channel_pano_seg: np.ndarray):
 def vis_pano_seg(
     raw_image_file: str,
     pano_seg_file: str,
-    uncertainty_map_file: str = None,
+    semantic_uncertainty_map_file: str = None,
 ):
     pano_seg = np.array(Image.open(pano_seg_file))
     raw_image = np.array(Image.open(raw_image_file))
@@ -136,7 +136,7 @@ def vis_pano_seg(
         color_palette,
     )
 
-    num_plots = 3 if uncertainty_map_file is not None else 2
+    num_plots = 3 if semantic_uncertainty_map_file is not None else 2
 
     plt.figure("Visualize panoptic segmentation")
     plt.subplot(1, num_plots, 1)
@@ -160,11 +160,11 @@ def vis_pano_seg(
 
     plt.subplot(1, num_plots, 2)
     plt.imshow(raw_image)
-    if uncertainty_map_file is not None:
-        uncertainty_map = np.array(Image.open(uncertainty_map_file))
+    if semantic_uncertainty_map_file is not None:
+        semantic_uncertainty_map = np.array(Image.open(semantic_uncertainty_map_file))
         plt.subplot(1, num_plots, 3)
         # Display uncertainty as gradient using blue to red
-        plt.imshow(uncertainty_map, cmap=cm.get_cmap("inferno"))
+        plt.imshow(semantic_uncertainty_map, cmap=cm.get_cmap("inferno"))
     plt.show()
 
 
@@ -186,7 +186,7 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "uncertainty_map_file", type=str, nargs="?", help="Path to uncertainty map"
+        "semantic_uncertainty_map_file", type=str, nargs="?", help="Path to uncertainty map"
     )
 
     return parser.parse_args()
@@ -197,5 +197,5 @@ if __name__ == "__main__":
     vis_pano_seg(
         args.raw_image_file,
         args.pano_seg_file,
-        args.uncertainty_map_file,
+        args.semantic_uncertainty_map_file,
     )
