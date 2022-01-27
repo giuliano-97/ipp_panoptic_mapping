@@ -97,7 +97,7 @@ def evaluate_run(
     metrics_df = pd.DataFrame(metrics_data)
 
     # Save the metrics to file
-    metrics_file_path = pred_voxel_segs_dir_path / "metrics.csv"
+    metrics_file_path = pred_voxel_segs_dir_path / "mapping_metrics.csv"
     metrics_df.set_index("Name").to_csv(metrics_file_path)
 
 
