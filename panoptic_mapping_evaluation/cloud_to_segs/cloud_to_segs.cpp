@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     }
 
     // Dump the segments info json to file
-    fs::path segs_file_path = cloud_file_path.replace_extension(".voxel_segs.json");
+    fs::path segs_file_path = cloud_file_path.replace_extension("").replace_extension(".voxel_segs.json");
     std::ofstream ofs(segs_file_path, std::ofstream::out);
     ofs << segs;
 
