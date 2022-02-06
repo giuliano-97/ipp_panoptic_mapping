@@ -21,7 +21,7 @@ def mean_iou(
     num_classes = len(gt_voxel_segs)
     iou_per_class = {c: 0.0 for c in gt_voxel_segs.keys()}
     for c in gt_voxel_segs.keys():
-        if len(pred_voxel_segs[c]) == 0:
+        if c not in pred_voxel_segs or len(pred_voxel_segs[c]) == 0:
             continue
         # Merge list of segments into one
         pred_mask = np.concatenate(pred_voxel_segs[c])
@@ -43,7 +43,6 @@ def panoptic_reconstruction_quality(
     fn_per_class = {c: 0 for c in gt_voxel_segs.keys()}
     for c in gt_voxel_segs.keys():
         if c not in pred_voxel_segs:
-            logging.warning(f"No segments were predicted for class {c}!")
             continue
         gt_matched = set()
         for pred_seg in pred_voxel_segs[c]:
