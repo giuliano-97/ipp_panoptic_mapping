@@ -35,7 +35,7 @@ def _get_segments_to_object_id_dict(seg_groups: List):
     return segment_to_object_id
 
 
-def make_labeled_pointcloud(
+def create_point_cloud_from_scan_grountruth(
     scan_dir_path: Path,
     out_dir_path: Path,
 ):
@@ -130,7 +130,7 @@ def make_labeled_pointcloud(
     # Export the pointcloud as ply
     ply_element = PlyElement.describe(labeled_pointcloud, "vertex")
     output_file_path = out_dir_path / (
-        scene_name + "_vh_clean_2.panoptic_pointcloud.ply"
+        scene_name + "_vh_clean_2.pointcloud.ply"
     )
     with output_file_path.open("wb") as f:
         PlyData([ply_element], text=True).write(f)
@@ -164,7 +164,7 @@ def _parse_args():
 
 if __name__ == "__main__":
     args = _parse_args()
-    make_labeled_pointcloud(
+    create_point_cloud_from_scan_grountruth(
         args.scan_dir_path,
         args.out_dir,
     )
