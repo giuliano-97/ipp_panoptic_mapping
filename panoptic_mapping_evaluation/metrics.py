@@ -5,6 +5,8 @@ import numpy as np
 
 from common import NYU40_STUFF_CLASSES, NYU40_THING_CLASSES
 
+from constants import TP_IOU_THRESHOLD
+
 
 def _set_iou(array1: np.ndarray, array2: np.ndarray):
     intersection = np.intersect1d(array1, array2).size
@@ -51,7 +53,7 @@ def panoptic_reconstruction_quality(
             for gt_seg_idx, gt_seg in enumerate(gt_voxel_segs[c]):
                 if gt_seg_idx not in gt_matched:
                     iou = _set_iou(pred_seg, gt_seg)
-                    if iou > 0.25 and iou > best_match_iou:
+                    if iou > TP_IOU_THRESHOLD and iou > best_match_iou:
                         best_match = gt_seg_idx
                         best_match_iou = iou
             if best_match == -1:
