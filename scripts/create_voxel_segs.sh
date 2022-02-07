@@ -7,7 +7,7 @@ then
     exit 1
 fi
 
-CLOUD_TO_SEGS=$(dirname $(dirname "${BASH_SOURCE[0]}"))/build/panoptic_mapping_evaluation/cloud_to_segs
+CLOUD_TO_SEGS=$(dirname $(dirname "${BASH_SOURCE[0]}"))/build/cloud_to_segs
 if [ ! -f $CLOUD_TO_SEGS ]
 then
     echo "cloud_to_segs binary not found - did you build the code correctly?"
