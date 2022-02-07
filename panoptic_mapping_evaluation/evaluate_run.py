@@ -24,13 +24,11 @@ _VOXEL_SEGS_FILE_EXTENSION = ".voxel_segs.json"
 
 
 def find_voxel_segs_files(pred_voxel_segs_dir_path: Path):
-    return sorted(
-        [
-            p
-            for p in pred_voxel_segs_dir_path.glob(f"*{_VOXEL_SEGS_FILE_EXTENSION}")
-            if p.is_file()
-        ]
-    )
+    return [
+        p
+        for p in pred_voxel_segs_dir_path.glob(f"*{_VOXEL_SEGS_FILE_EXTENSION}")
+        if p.is_file()
+    ]
 
 
 def decode_panoptic_label(panoptic_label):
@@ -108,7 +106,75 @@ def map_voxel_segs_ids_to_panoptic(
             )
 
 
-def evaluate_panoptic_pointclouds(
+def evaluate_run(
+    run_dir_path: Path,
+    gt_voxel_segs_file_path: Path,
+    map_ids_to_panoptic: bool,
+) -> pd.DataFrame:
+    voxel_segs_files = find_voxel_segs_files(run_dir_path)
+    if len(voxel_segs_files) == 0:
+        logging.warning(f"No voxel segs files to evaluate in {run_dir_path.name}")
+        return None
+
+    gt_voxel_segs_per_class = aggregate_voxel_segs_by_class(
+        load_voxel_segs_from_file(gt_voxel_segs_file_path),
+    )
+
+    metrics_data = []
+
+    # Compute the metrics for every run
+    for pred_voxel_segs_file_path in voxel_segs_files:
+        logging.info(f"Evaluating {pred_voxel_segs_file_path.name}")
+
+        # Load voxel segs
+        pred_voxel_segs = load_voxel_segs_from_file(pred_voxel_segs_file_path)
+
+        # Remap predicted voxel segs ids to panoptic format (semantic_id * 1000 + instance id)
+        if map_ids_to_panoptic:
+            instance_to_class_id_file_path = pred_voxel_segs_file_path.parent.joinpath(
+                pred_voxel_segs_file_path.name.replace(
+                    _VOXEL_SEGS_FILE_EXTENSION, ".csv"
+                )
+            )
+            if not instance_to_class_id_file_path.is_file():
+                logging.error(
+                    "Instance to class ID map file not found for "
+                    f"{pred_voxel_segs_file_path.name}. Skipped."
+                )
+                continue
+            instance_to_class_id_map = load_instance_to_class_id_map(
+                instance_to_class_id_file_path
+            )
+            map_voxel_segs_ids_to_panoptic(pred_voxel_segs, instance_to_class_id_map)
+
+        # Aggregate predicted voxel segments by class id
+        pred_voxel_segs_per_class = aggregate_voxel_segs_by_class(pred_voxel_segs)
+
+        # Create new metrics data entry
+        metrics_data_entry = {
+            "FrameID": pred_voxel_segs_file_path.name.rstrip(_VOXEL_SEGS_FILE_EXTENSION)
+        }
+
+        # Add PRQ, PRQ_thing, PRQ_stuff, RRQ, SRQ, TP, FP, FN
+        metrics_data_entry.update(
+            panoptic_reconstruction_quality(
+                pred_voxel_segs_per_class, gt_voxel_segs_per_class
+            )
+        )
+
+        # Add mIoU
+        metrics_data_entry.update(
+            {"mIoU": mean_iou(pred_voxel_segs_per_class, gt_voxel_segs_per_class)}
+        )
+
+        # Append to list of metrics data entries
+        metrics_data.append(metrics_data_entry)
+
+    metrics_df = pd.DataFrame(metrics_data).set_index("FrameID").sort_index()
+    return metrics_df
+
+
+def main(
     pred_voxel_segs_dir_path: Path,
     gt_voxel_segs_file_path: Path,
     map_ids_to_panoptic: bool = False,
@@ -122,55 +188,15 @@ def evaluate_panoptic_pointclouds(
     else:
         output_dir_path = pred_voxel_segs_dir_path
 
-    # Load grountruth
-    gt_voxel_segs_per_class = aggregate_voxel_segs_by_class(
-        load_voxel_segs_from_file(gt_voxel_segs_file_path)
-    )
-
-    # Initialize list of metrics data entries
-    metrics_data = []
-
-    # Find all the segs files
-    pred_voxel_segs_files = find_voxel_segs_files(pred_voxel_segs_dir_path)
-
-    # Compute the metrics for every run
-    for pred_voxel_segs_file in pred_voxel_segs_files:
-        logging.info(f"Evaluating {pred_voxel_segs_file.name}")
-        pred_voxel_segs = load_voxel_segs_from_file(pred_voxel_segs_file)
-
-        # Map predicted voxel segs ids to panoptic format (semantic_id * 1000 + instance id)
-        if map_ids_to_panoptic:
-            instance_to_class_id_file_path = pred_voxel_segs_file.parent.joinpath(
-                pred_voxel_segs_file.name.replace(_VOXEL_SEGS_FILE_EXTENSION, ".csv")
-            )
-            if not instance_to_class_id_file_path.is_file():
-                logging.error(
-                    "Instance to class ID map file not found for "
-                    f"{pred_voxel_segs_file.name}. Skipped."
-                )
-                continue
-            instance_to_class_id_map = load_instance_to_class_id_map(
-                instance_to_class_id_file_path
-            )
-            map_voxel_segs_ids_to_panoptic(
-                pred_voxel_segs, instance_to_class_id_map
-            )
-
-        pred_voxel_segs_per_class = aggregate_voxel_segs_by_class(pred_voxel_segs)
-        metrics_data_entry = {
-            "Name": pred_voxel_segs_file.name.rstrip(_VOXEL_SEGS_FILE_EXTENSION)
-        }
-        prq_metrics_dict = panoptic_reconstruction_quality(
-            pred_voxel_segs, gt_voxel_segs_per_class
-        )
-        metrics_data_entry.update(prq_metrics_dict)
-        metrics_data_entry.update(
-            {"mIoU": mean_iou(pred_voxel_segs_per_class, gt_voxel_segs_per_class)}
-        )
-        metrics_data.append(metrics_data_entry)
-
     # Put metrics data into a dataframe
-    metrics_df = pd.DataFrame(metrics_data)
+    metrics_df = evaluate_run(
+        pred_voxel_segs_dir_path,
+        gt_voxel_segs_file_path,
+        map_ids_to_panoptic,
+    )
+    if metrics_df is None:
+        logging.error(f"Run {pred_voxel_segs_dir_path.name} could not be evaluated!")
+        exit(1)
 
     # Save the metrics to file
     metrics_file_path = pred_voxel_segs_dir_path / "mapping_metrics.csv"
@@ -212,7 +238,7 @@ def _parse_args():
 
 if __name__ == "__main__":
     args = _parse_args()
-    evaluate_panoptic_pointclouds(
+    main(
         args.pred_voxel_segs_dir_path,
         args.gt_voxel_segs_file_path,
         args.map_ids_to_panoptic,
