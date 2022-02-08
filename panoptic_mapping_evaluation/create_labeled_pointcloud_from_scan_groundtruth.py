@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from plyfile import PlyData, PlyElement
 
+import pointcloud as pcd_utils
 from scannet_utils import create_labeled_pointcloud_from_scan_groundtruth
 
 
@@ -45,22 +46,13 @@ if __name__ == "__main__":
         args.scan_dir_path,
     )
 
-    labeled_pointcloud = np.array(
-        [tuple(row) for row in np.concatenate((points, colors, labels), axis=1)],
-        dtype=[
-            ("x", np.float32),
-            ("y", np.float32),
-            ("z", np.float32),
-            ("red", np.uint8),
-            ("green", np.uint8),
-            ("blue", np.uint8),
-            ("alpha", np.uint8),
-            ("label", np.uint32),
-        ],
+    labeled_pointcloud_file_path = out_dir_path / (
+        out_dir_path.name + ".pointcloud.ply"
     )
 
-    # Export the pointcloud as ply
-    ply_element = PlyElement.describe(labeled_pointcloud, "vertex")
-    output_file_path = out_dir_path / (out_dir_path.name + ".pointcloud.ply")
-    with output_file_path.open("wb") as f:
-        PlyData([ply_element], text=True).write(f)
+    pcd_utils.save_labeled_pointcloud(
+        labeled_pointcloud_file_path,
+        points,
+        labels,
+        colors,
+    )
