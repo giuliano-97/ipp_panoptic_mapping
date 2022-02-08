@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from plyfile import PlyData
+from plyfile import PlyData, PlyElement
 
 from panoptic_mapping_evaluation.constants import VOXEL_SIZE
 
@@ -22,18 +22,18 @@ def load_labeled_pointcloud(pcd_file_path: Path, return_colors=False):
         g = np.array(ply_data["vertex"].data["green"])
         b = np.array(ply_data["vertex"].data["blue"])
         a = np.array(ply_data["vertex"].data["alpha"])
-        colors = np.column_stack((r,g,b,a))
+        colors = np.column_stack((r, g, b, a))
         return points, labels, colors
     else:
         return points, labels
 
 
-def labeled_pointcloud_to_grid(
+def make_panoptic_grid(
     points: np.ndarray,
     labels: np.ndarray,
     max_voxel_coord: Optional[np.ndarray] = None,
 ):
-    """Convert labeled pointcloud to semantic grid"""
+    """Build a 3D grid where each entry is assigned panoptic label."""
     # Convert all points to voxel coordinates
     points_voxel_coords = np.floor(points).astype(np.int32)
 
@@ -45,7 +45,7 @@ def labeled_pointcloud_to_grid(
     # Initialize grid
     if max_voxel_coord is None:
         max_voxel_coord = np.ceil(np.max(points, axis=0)).astype(np.int32)
-    voxel_grid = np.squeeze(np.zeros(np.append(max_voxel_coord, 1), dtype=np.int32))
+    voxel_grid = np.zeros(shape=max_voxel_coord, dtype=np.int32)
 
     # Fill voxel grid
     for idx, voxel_coord in enumerate(non_empty_voxels):
@@ -73,7 +73,36 @@ def get_world_to_grid_transform(points: np.ndarray, voxel_size: float = VOXEL_SI
     T_G_W = np.block(
         [
             [np.identity(3) / voxel_size, -1 * t],
-            [np.zeros(1, 3), np.ones(1)],
+            [np.zeros((1, 3)), np.ones(1)],
         ]
     )
     return T_G_W
+
+
+def save_labeled_pointcloud(
+    pcd_file_path: Path,
+    points: np.ndarray,
+    labels: np.ndarray,
+    colors: np.ndarray,
+):
+    labeled_pointcloud_data = np.array(
+        [
+            tuple(row)
+            for row in np.concatenate((points, colors, labels.reshape(-1, 1)), axis=1)
+        ],
+        dtype=[
+            ("x", np.float32),
+            ("y", np.float32),
+            ("z", np.float32),
+            ("red", np.uint8),
+            ("green", np.uint8),
+            ("blue", np.uint8),
+            ("alpha", np.uint8),
+            ("label", np.uint32),
+        ],
+    )
+
+    # Export the pointcloud as ply
+    ply_element = PlyElement.describe(labeled_pointcloud_data, "vertex")
+    with pcd_file_path.open("wb") as f:
+        PlyData([ply_element], text=True).write(f)
