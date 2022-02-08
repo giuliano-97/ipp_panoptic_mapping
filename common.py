@@ -46,3 +46,5 @@ MAP_NYU40_CLASS_IDS_TO_NAMES = {
     39: "otherfurniture",
     40: "otherprop",
 }
+
+PANOPTIC_LABEL_DIVISOR = 1000

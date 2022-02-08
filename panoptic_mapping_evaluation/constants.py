@@ -1,6 +1,8 @@
-from phonenumbers import format_out_of_country_keeping_alpha_chars
-from pkg_resources import fixup_namespace_packages
+# Metrics evaluation
 
+TP_IOU_THRESHOLD = 0.25
+VOXEL_SIZE = 0.05
+INSTANCE_MIN_NUM_VOXELS = 150
 
 PRQ_KEY = "PRQ"
 PRQ_THING_KEY = "PRQ_th"
@@ -11,8 +13,6 @@ TP_KEY = "TP"
 FP_KEY = "FP"
 FN_KEY = "FN"
 MIOU_KEY = "mIoU"
-
-TP_IOU_THRESHOLD = 0.25
 
 PRQ_SRQ_RRQ_KEYS = [
     PRQ_KEY,
