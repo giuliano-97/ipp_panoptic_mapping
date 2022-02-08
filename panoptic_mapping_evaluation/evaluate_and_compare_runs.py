@@ -6,7 +6,7 @@ import pandas as pd
 
 
 from constants import MIOU_KEY, PRQ_SRQ_RRQ_KEYS, TP_FP_FN_KEYS
-from vis import create_grouped_barplot
+from graphing import create_grouped_barplot
 from evaluate_run import evaluate_run
 
 

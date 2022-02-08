@@ -5,7 +5,7 @@ import numpy as np
 
 from common import NYU40_STUFF_CLASSES, NYU40_THING_CLASSES
 
-from constants import TP_IOU_THRESHOLD
+from constants import TP_IOU_THRESHOLD, SEGMENT_MIN_NUM_VOXELS
 
 
 def _set_iou(array1: np.ndarray, array2: np.ndarray):
@@ -43,14 +43,21 @@ def panoptic_reconstruction_quality(
     tp_iou_per_class = {c: [] for c in gt_voxel_segs.keys()}
     fp_per_class = {c: 0 for c in gt_voxel_segs.keys()}
     fn_per_class = {c: 0 for c in gt_voxel_segs.keys()}
-    for c in gt_voxel_segs.keys():
+    for c, gt_segments in gt_voxel_segs.items():
+        # If class c is not detected, all the gt segments are false negatives
         if c not in pred_voxel_segs:
+            fn_per_class[c] += len(gt_segments)
             continue
+        # Now match pred segments of the same class
         gt_matched = set()
         for pred_seg in pred_voxel_segs[c]:
+            # Ignore segments that are too small
+            if len(pred_seg) < SEGMENT_MIN_NUM_VOXELS:
+                continue
+            # Match the 
             best_match = -1
             best_match_iou = 0
-            for gt_seg_idx, gt_seg in enumerate(gt_voxel_segs[c]):
+            for gt_seg_idx, gt_seg in enumerate(gt_segments):
                 if gt_seg_idx not in gt_matched:
                     iou = _set_iou(pred_seg, gt_seg)
                     if iou > TP_IOU_THRESHOLD and iou > best_match_iou:
@@ -62,7 +69,7 @@ def panoptic_reconstruction_quality(
                 tp_per_class[c] += 1
                 tp_iou_per_class[c].append(best_match_iou)
                 gt_matched.add(gt_seg_idx)
-        for gt_seg_idx, _ in enumerate(gt_voxel_segs[c]):
+        for gt_seg_idx, _ in enumerate(gt_segments):
             if gt_seg_idx not in gt_matched:
                 fn_per_class[c] = +1
 
