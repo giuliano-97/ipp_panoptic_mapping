@@ -37,13 +37,9 @@ def evaluate_and_compare_runs(
     cumulative_metrics_data = []
 
     for run_dir_path in run_dirs:
-        # TODO: hack to determine whether ids should be remapped
-        # better to do this beforehand or make this step unnecessary
-        map_ids_to_panoptic = "single_tsdf" in run_dir_path.name
         metrics_df = evaluate_run(
             run_dir_path=run_dir_path,
             gt_voxel_segs_file_path=gt_voxel_segs_file_path,
-            map_ids_to_panoptic=map_ids_to_panoptic,
         )
 
         if metrics_df is None:
