@@ -9,7 +9,7 @@ import pandas as pd
 import panoptic_mapping_evaluation.pointcloud as pcd_utils
 import panoptic_mapping_evaluation.utils as utils
 from common import NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
-from panoptic_mapping_evaluation.constants import VOXEL_SIZE
+from panoptic_mapping_evaluation.constants import VOXEL_SIZE, TP_IOU_THRESHOLD
 
 
 logging.basicConfig(level=logging.INFO)
@@ -73,7 +73,7 @@ def evaluate_panoptic_reconstruction_quality(
         )
 
         iou = intersection_area / union
-        if iou > 0.25:
+        if iou > TP_IOU_THRESHOLD:
             tp_per_class[gt_class_id] += 1
             iou_per_class[gt_class_id] += iou
             gt_matched.add(gt_panoptic_label)
@@ -97,10 +97,11 @@ def evaluate_panoptic_reconstruction_quality(
                 continue
             fp_per_class[class_id] += 1
 
-    srq_per_class = np.nan_to_num(iou_per_class / tp_per_class, 1.0)
-    rrq_per_class = np.nan_to_num(
-        tp_per_class / (tp_per_class + 0.5 * fp_per_class + 0.5 * fn_per_class)
-    )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        srq_per_class = np.nan_to_num(iou_per_class / tp_per_class)
+        rrq_per_class = np.nan_to_num(
+            tp_per_class / (tp_per_class + 0.5 * fp_per_class + 0.5 * fn_per_class)
+        )
     prq_per_class = np.multiply(srq_per_class, rrq_per_class)
 
     valid_classes_mask = np.not_equal(tp_per_class + fp_per_class + fn_per_class, 0)
@@ -200,8 +201,14 @@ def main(
         run_dir_path,
         gt_pointcloud_file_path,
     )
+
+    # Metrics
     if metrics_df is None:
+        logging.warning(f"{run_dir_path.name} could not be evaluated!")
         exit(1)
+    else:
+        metrics_file_path = run_dir_path / "metrics.csv"
+        metrics_df.to_csv(str(metrics_file_path))
 
 
 def _parse_args():
