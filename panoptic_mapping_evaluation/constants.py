@@ -16,8 +16,6 @@ MIOU_KEY = "mIoU"
 
 PRQ_SRQ_RRQ_KEYS = [
     PRQ_KEY,
-    PRQ_STUFF_KEY,
-    PRQ_THING_KEY,
     SRQ_KEY,
     RRQ_KEY,
 ]

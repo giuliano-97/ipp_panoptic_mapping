@@ -8,7 +8,7 @@ import seaborn as sns
 plt.ioff()
 
 
-def create_grouped_barplot(
+def save_grouped_barplot(
     metrics_df: pd.DataFrame,
     barplot_file_path: Path,
     pivot_column: str = "method",

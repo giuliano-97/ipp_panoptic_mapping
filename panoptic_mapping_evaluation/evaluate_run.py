@@ -1,170 +1,227 @@
 import argparse
-import csv
-from fileinput import filename
-import json
 import logging
-from multiprocessing.sharedctypes import Value
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Mapping, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from sklearn import metrics
 
-from common import NYU40_IGNORE_LABEL, NYU40_STUFF_CLASSES, NYU40_THING_CLASSES
-from panoptic_mapping_evaluation.metrics import (
-    mean_iou,
-    panoptic_reconstruction_quality,
-)
+import panoptic_mapping_evaluation.pointcloud as pcd_utils
+import panoptic_mapping_evaluation.utils as utils
+import panoptic_mapping_evaluation.constants as constants
+from common import NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
+
 
 logging.basicConfig(level=logging.INFO)
 
 
-_PANOPTIC_LABEL_DIVISOR = 1000
-_VOXEL_SEGS_FILE_EXTENSION = ".voxel_segs.json"
+_OFFSET = 256**2
+_NUM_CLASSES = 41
 
 
-def find_voxel_segs_files(pred_voxel_segs_dir_path: Path):
-    return [
-        p
-        for p in pred_voxel_segs_dir_path.glob(f"*{_VOXEL_SEGS_FILE_EXTENSION}")
-        if p.is_file()
-    ]
+def _ids_to_counts(id_grid: np.ndarray) -> Mapping[int, int]:
+    """Given a numpy array, a mapping from each unique entry to its count."""
+    ids, counts = np.unique(id_grid, return_counts=True)
+    return dict(zip(ids, counts))
 
 
-def decode_panoptic_label(panoptic_label):
-    return (
-        panoptic_label // _PANOPTIC_LABEL_DIVISOR,
-        panoptic_label % _PANOPTIC_LABEL_DIVISOR,
+def evaluate_mean_iou(
+    gt_panoptic_grid: np.ndarray,
+    pred_panoptic_grid: np.ndarray,
+) -> Dict[str, float]:
+    assert gt_panoptic_grid.shape == pred_panoptic_grid.shape
+
+    iou_per_class = np.zeros(_NUM_CLASSES, dtype=np.float32)
+
+    # We evaluate IoU only over class labels
+    gt_semantic_grid = gt_panoptic_grid // PANOPTIC_LABEL_DIVISOR
+    pred_semantic_grid = pred_panoptic_grid // PANOPTIC_LABEL_DIVISOR
+
+    # Only evaluate over classes that appear in the GT and are not the ignore label
+    valid_classes = np.unique(gt_semantic_grid)
+    valid_classes = valid_classes[valid_classes != NYU40_IGNORE_LABEL]
+
+    # Compute IoU for every valid class
+    for class_id in valid_classes:
+        gt_class_mask = gt_semantic_grid == class_id
+        pred_class_mask = pred_semantic_grid == class_id
+
+        intersection_area = np.count_nonzero(gt_class_mask & pred_class_mask)
+        union_area = np.count_nonzero(gt_class_mask | pred_class_mask)
+
+        iou_per_class[class_id] = intersection_area / union_area
+
+    # Compute mean iou
+    miou = np.mean(np.take(iou_per_class, valid_classes))
+
+    return {constants.MIOU_KEY: miou}
+
+
+def evaluate_panoptic_reconstruction_quality(
+    gt_panoptic_grid: np.ndarray,
+    pred_panoptic_grid: np.ndarray,
+) -> Dict[str, float]:
+    assert gt_panoptic_grid.shape == pred_panoptic_grid.shape
+
+    iou_per_class = np.zeros(_NUM_CLASSES, dtype=np.float64)
+    tp_per_class = np.zeros(_NUM_CLASSES, dtype=np.float64)
+    fp_per_class = np.zeros(_NUM_CLASSES, dtype=np.float64)
+    fn_per_class = np.zeros(_NUM_CLASSES, dtype=np.float64)
+
+    gt_segment_areas = _ids_to_counts(gt_panoptic_grid)
+    pred_segment_areas = _ids_to_counts(pred_panoptic_grid)
+
+    # Combine the groundtruth and predicted labels. Dividing up the voxels
+    # based on which groundtruth segment and which predicted segment they belong
+    # to, this will assign a different 64-bit integer label to each choice
+    # of (groundtruth segment, predicted segment), encoded as
+    #   gt_panoptic_label * offset + pred_panoptic_label.
+    intersection_id_grid = gt_panoptic_grid.astype(
+        np.int64
+    ) * _OFFSET + pred_panoptic_grid.astype(np.int64)
+
+    intersection_areas = _ids_to_counts(intersection_id_grid)
+
+    gt_matched = set()
+    pred_matched = set()
+
+    for intersection_id, intersection_area in intersection_areas.items():
+        gt_panoptic_label = intersection_id // _OFFSET
+        pred_panoptic_label = intersection_id % _OFFSET
+
+        gt_class_id = gt_panoptic_label // PANOPTIC_LABEL_DIVISOR
+        pred_class_id = pred_panoptic_label // PANOPTIC_LABEL_DIVISOR
+
+        if gt_class_id != pred_class_id:
+            continue
+
+        if pred_class_id == NYU40_IGNORE_LABEL:
+            continue
+
+        union = (
+            gt_segment_areas[gt_panoptic_label]
+            + pred_segment_areas[pred_panoptic_label]
+            - intersection_area
+        )
+
+        iou = intersection_area / union
+        if iou > constants.TP_IOU_THRESHOLD:
+            tp_per_class[gt_class_id] += 1
+            iou_per_class[gt_class_id] += iou
+            gt_matched.add(gt_panoptic_label)
+            pred_matched.add(pred_panoptic_label)
+
+    for gt_panoptic_label in gt_segment_areas:
+        if gt_panoptic_label in gt_matched:
+            continue
+        class_id = gt_panoptic_label // PANOPTIC_LABEL_DIVISOR
+        # Failing to detect a void segment is not a false negative.
+        if class_id == NYU40_IGNORE_LABEL:
+            continue
+        fn_per_class[class_id] += 1
+
+    # Count false positives for each category.
+    for pred_panoptic_label in pred_segment_areas:
+        if pred_panoptic_label in pred_matched:
+            continue
+        class_id = pred_panoptic_label // PANOPTIC_LABEL_DIVISOR
+        if class_id == NYU40_IGNORE_LABEL:
+            continue
+        fp_per_class[class_id] += 1
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        srq_per_class = np.nan_to_num(iou_per_class / tp_per_class)
+        rrq_per_class = np.nan_to_num(
+            tp_per_class / (tp_per_class + 0.5 * fp_per_class + 0.5 * fn_per_class)
+        )
+    prq_per_class = np.multiply(srq_per_class, rrq_per_class)
+
+    valid_classes_mask = np.not_equal(tp_per_class + fp_per_class + fn_per_class, 0)
+
+    qualities_per_class = np.row_stack((prq_per_class, srq_per_class, rrq_per_class))
+
+    counts_per_class = np.row_stack((tp_per_class, fp_per_class, fn_per_class))
+
+    prq, srq, rrq = np.mean(
+        qualities_per_class[:, valid_classes_mask],
+        axis=1,
     )
 
+    tp, fp, fn = np.sum(
+        counts_per_class[:, valid_classes_mask],
+        axis=1,
+    )
 
-def aggregate_voxel_segs_by_class(voxel_segs):
-    voxel_segs_per_class = dict()
-    for segment in voxel_segs:
-        label = segment["id"]
-        if label == NYU40_IGNORE_LABEL:
-            continue
-        semantic_id, _ = decode_panoptic_label(label)
-        if semantic_id not in voxel_segs_per_class:
-            voxel_segs_per_class[semantic_id] = []
-        voxel_indices = np.array(
-            [tuple(s) for s in segment["voxels"]],
-            dtype=[
-                ("i", np.int32),
-                ("j", np.int32),
-                ("k", np.int32),
-            ],
-        )
-        voxel_segs_per_class[semantic_id].append(voxel_indices)
-    return voxel_segs_per_class
-
-
-def load_voxel_segs_from_file(voxel_segs_file: Path):
-    with voxel_segs_file.open("r") as j:
-        voxel_segs = json.load(j)
-
-    return voxel_segs
-
-
-def load_instance_to_class_id_map(id_to_class_map_file_path: Path):
-    instance_to_class_id_map = dict()
-    with id_to_class_map_file_path.open("r") as f:
-        reader = csv.DictReader(f, fieldnames=["InstanceID", "ClassID"])
-
-        for row in reader:
-            try:
-                instance_to_class_id_map.update(
-                    {int(row["InstanceID"]): int(row["ClassID"])}
-                )
-            except ValueError:
-                pass
-    return instance_to_class_id_map
-
-
-def map_voxel_segs_ids_to_panoptic(
-    voxel_segs: List[Dict],
-    instance_id_to_class_map: Dict[int, int],
-):
-    for voxel_seg in voxel_segs:
-        # Stuff segments
-        if voxel_seg["id"] in NYU40_STUFF_CLASSES:
-            voxel_seg["id"] *= _PANOPTIC_LABEL_DIVISOR
-        # Instance segments
-        else:
-            # Ignore instance segments whose class is not known
-            if voxel_seg["id"] not in instance_id_to_class_map:
-                voxel_seg["id"] = NYU40_IGNORE_LABEL
-            instance_id = voxel_seg["id"]
-            class_id = instance_id_to_class_map[instance_id]
-            # Ignore instance segments mapped to an invalid class
-            if class_id not in NYU40_THING_CLASSES:
-                voxel_seg["id"] = NYU40_IGNORE_LABEL
-            # Normalize the instance id just in case
-            voxel_seg["id"] = (
-                class_id * _PANOPTIC_LABEL_DIVISOR
-                + instance_id % _PANOPTIC_LABEL_DIVISOR
-            )
+    return {
+        constants.PRQ_KEY: prq,
+        constants.SRQ_KEY: srq,
+        constants.RRQ_KEY: rrq,
+        constants.TP_KEY: tp,
+        constants.FP_KEY: fp,
+        constants.FN_KEY: fn,
+    }
 
 
 def evaluate_run(
     run_dir_path: Path,
-    gt_voxel_segs_file_path: Path,
-    map_ids_to_panoptic: bool,
+    gt_pointcloud_file_path: Path,
 ) -> pd.DataFrame:
-    voxel_segs_files = find_voxel_segs_files(run_dir_path)
-    if len(voxel_segs_files) == 0:
-        logging.warning(f"No voxel segs files to evaluate in {run_dir_path.name}")
-        return None
+    assert run_dir_path.is_dir()
+    assert gt_pointcloud_file_path.is_file()
 
-    gt_voxel_segs_per_class = aggregate_voxel_segs_by_class(
-        load_voxel_segs_from_file(gt_voxel_segs_file_path),
+    # Load the gt pointcloud with the labels
+    points, labels = pcd_utils.load_labeled_pointcloud(gt_pointcloud_file_path)
+
+    # Compute the points to grid transformation
+    T_G_W = pcd_utils.get_world_to_grid_transform(
+        points, voxel_size=constants.VOXEL_SIZE
+    )
+
+    # Transform and voxelize the groundtruth pointcloud
+    gt_panoptic_grid = pcd_utils.make_panoptic_grid(
+        points=utils.transform_points(points, T_G_W),
+        labels=labels,
     )
 
     metrics_data = []
 
-    # Compute the metrics for every run
-    for pred_voxel_segs_file_path in voxel_segs_files:
-        logging.info(f"Evaluating {pred_voxel_segs_file_path.name}")
+    # Comput the metrics for every map
+    for pred_pointcloud_file_path in sorted(run_dir_path.glob("*.pointcloud.ply")):
 
-        # Load voxel segs
-        pred_voxel_segs = load_voxel_segs_from_file(pred_voxel_segs_file_path)
+        logging.info(f"Evaluating {pred_pointcloud_file_path.name}")
 
-        # Remap predicted voxel segs ids to panoptic format (semantic_id * 1000 + instance id)
-        if map_ids_to_panoptic:
-            instance_to_class_id_file_path = pred_voxel_segs_file_path.parent.joinpath(
-                pred_voxel_segs_file_path.name.replace(
-                    _VOXEL_SEGS_FILE_EXTENSION, ".csv"
-                )
-            )
-            if not instance_to_class_id_file_path.is_file():
-                logging.error(
-                    "Instance to class ID map file not found for "
-                    f"{pred_voxel_segs_file_path.name}. Skipped."
-                )
-                continue
-            instance_to_class_id_map = load_instance_to_class_id_map(
-                instance_to_class_id_file_path
-            )
-            map_voxel_segs_ids_to_panoptic(pred_voxel_segs, instance_to_class_id_map)
+        # Load the pointcloud
+        pred_points, pred_labels = pcd_utils.load_labeled_pointcloud(
+            pred_pointcloud_file_path
+        )
 
-        # Aggregate predicted voxel segments by class id
-        pred_voxel_segs_per_class = aggregate_voxel_segs_by_class(pred_voxel_segs)
+        # Make the panoptic grid
+        pred_panoptic_grid = pcd_utils.make_panoptic_grid(
+            points=utils.transform_points(pred_points, T_G_W),
+            labels=pred_labels,
+            max_voxel_coord=gt_panoptic_grid.shape,
+        )
 
         # Create new metrics data entry
         metrics_data_entry = {
-            "FrameID": pred_voxel_segs_file_path.name.rstrip(_VOXEL_SEGS_FILE_EXTENSION)
+            "FrameID": pred_pointcloud_file_path.name.rstrip(".pointcloud.ply")
         }
 
-        # Add PRQ, PRQ_thing, PRQ_stuff, RRQ, SRQ, TP, FP, FN
+        # Add PRQ, RRQ, SRQ, TP, FP, FN
         metrics_data_entry.update(
-            panoptic_reconstruction_quality(
-                pred_voxel_segs_per_class, gt_voxel_segs_per_class
+            evaluate_panoptic_reconstruction_quality(
+                gt_panoptic_grid,
+                pred_panoptic_grid,
             )
         )
 
         # Add mIoU
         metrics_data_entry.update(
-            {"mIoU": mean_iou(pred_voxel_segs_per_class, gt_voxel_segs_per_class)}
+            evaluate_mean_iou(
+                gt_panoptic_grid,
+                pred_panoptic_grid,
+            )
         )
 
         # Append to list of metrics data entries
@@ -175,32 +232,25 @@ def evaluate_run(
 
 
 def main(
-    pred_voxel_segs_dir_path: Path,
-    gt_voxel_segs_file_path: Path,
-    map_ids_to_panoptic: bool = False,
-    output_dir_path: Optional[Path] = None,
+    run_dir_path: Path,
+    gt_pointcloud_file_path: Path,
 ):
-    assert pred_voxel_segs_dir_path.is_dir()
-    assert gt_voxel_segs_file_path.is_file()
-
-    if output_dir_path is not None:
-        assert output_dir_path.exists()
-    else:
-        output_dir_path = pred_voxel_segs_dir_path
+    assert run_dir_path.is_dir()
+    assert gt_pointcloud_file_path.is_file()
 
     # Put metrics data into a dataframe
     metrics_df = evaluate_run(
-        pred_voxel_segs_dir_path,
-        gt_voxel_segs_file_path,
-        map_ids_to_panoptic,
+        run_dir_path,
+        gt_pointcloud_file_path,
     )
-    if metrics_df is None:
-        logging.error(f"Run {pred_voxel_segs_dir_path.name} could not be evaluated!")
-        exit(1)
 
-    # Save the metrics to file
-    metrics_file_path = pred_voxel_segs_dir_path / "mapping_metrics.csv"
-    metrics_df.set_index("Name").to_csv(metrics_file_path)
+    # Metrics
+    if metrics_df is None:
+        logging.warning(f"{run_dir_path.name} could not be evaluated!")
+        exit(1)
+    else:
+        metrics_file_path = run_dir_path / "metrics.csv"
+        metrics_df.to_csv(str(metrics_file_path))
 
 
 def _parse_args():
@@ -209,28 +259,15 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "pred_voxel_segs_dir_path",
+        "run_dir_path",
         type=lambda p: Path(p).absolute(),
-        help="Path to directory with *_voxel_segs.json files to be evaluated.",
+        help="Path to run to be evaluated",
     )
 
     parser.add_argument(
-        "gt_voxel_segs_file_path",
+        "gt_pointcloud_file_path",
         type=lambda p: Path(p).absolute(),
-        help="Path to the grountruth voxel segments to evaluate against.",
-    )
-
-    parser.add_argument(
-        "--map_ids_to_panoptic",
-        action="store_true",
-        help="Remap predicted labels to the panoptic format before computing the metrics.",
-    )
-
-    parser.add_argument(
-        "-o",
-        "--output_dir_path",
-        type=lambda p: Path(p).absolute(),
-        help="Path to the output directory where the metrics file should be saved.",
+        help="Path to the grountruth pointcloud to evaluate.",
     )
 
     return parser.parse_args()
@@ -239,8 +276,6 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
     main(
-        args.pred_voxel_segs_dir_path,
-        args.gt_voxel_segs_file_path,
-        args.map_ids_to_panoptic,
-        args.output_dir_path,
+        args.run_dir_path,
+        args.gt_pointcloud_file_path,
     )

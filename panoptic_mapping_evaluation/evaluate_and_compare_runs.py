@@ -1,21 +1,21 @@
 import argparse
 import logging
 from pathlib import Path
+from typing import List
 
 import pandas as pd
 
-
 from constants import MIOU_KEY, PRQ_SRQ_RRQ_KEYS, TP_FP_FN_KEYS
-from graphing import create_grouped_barplot
-from evaluate_run import evaluate_run
+from graphing import save_grouped_barplot
+from panoptic_mapping_evaluation.evaluate_run import evaluate_run
 
 
-def _find_runs(runs_dir_path: Path):
+def _find_runs(runs_dir_path: Path) -> List[Path]:
     run_dirs = []
     for p in runs_dir_path.iterdir():
         if not p.is_dir():
             continue
-        if len(list(p.glob("*.voxel_segs.json"))) > 0:
+        if len(list(p.glob("*.pointcloud.ply"))) > 0:
             run_dirs.append(p)
     return run_dirs
 
@@ -25,9 +25,10 @@ def evaluate_and_compare_runs(
     runs_dir_path: Path,
 ):
     assert scan_dir_path.is_dir()
-    gt_voxel_segs_file_path = next(scan_dir_path.glob("*.voxel_segs.json"), None)
-    if gt_voxel_segs_file_path is None:
-        logging.warning("Groundtruth scan data dir has no voxel segs.json file.")
+
+    gt_pointcloud_file_path = next(scan_dir_path.glob("*.pointcloud.ply"), None)
+    if gt_pointcloud_file_path is None:
+        logging.warning("Groundtruth scan data dir has no panoptic labeled pointcloud!")
         exit(1)
 
     run_dirs = _find_runs(runs_dir_path)
@@ -37,14 +38,24 @@ def evaluate_and_compare_runs(
     cumulative_metrics_data = []
 
     for run_dir_path in run_dirs:
-        metrics_df = evaluate_run(
-            run_dir_path=run_dir_path,
-            gt_voxel_segs_file_path=gt_voxel_segs_file_path,
-        )
+        logging.info(f"Evaluating run: {run_dir_path.name}")
 
-        if metrics_df is None:
-            logging.warning(f"Run {run_dir_path.name} could not be evaluated. Skipped.")
-            continue
+        metrics_file_path = run_dir_path / "metrics.csv"
+        if metrics_file_path.is_file():
+            metrics_df = pd.read_csv(str(metrics_file_path))
+        else:
+            metrics_df = evaluate_run(
+                run_dir_path=run_dir_path,
+                gt_pointcloud_file_path=gt_pointcloud_file_path,
+            )
+
+            if metrics_df is None:
+                logging.warning(
+                    f"Run {run_dir_path.name} could not be evaluated. Skipped."
+                )
+                continue
+
+            metrics_df.to_csv(str(metrics_file_path))
 
         final_map_data = metrics_df.tail(1).copy()
         final_map_data["method"] = run_dir_path.name
@@ -57,20 +68,23 @@ def evaluate_and_compare_runs(
         ignore_index=True,
     )
 
+    cumulative_metrics_file_path = runs_dir_path / "metrics.csv"
+    cumulative_metrics_df.to_csv(str(cumulative_metrics_file_path))
+
     prq_srq_rrq_plot_file_path = runs_dir_path / "prq_srq_rrq.png"
-    create_grouped_barplot(
+    save_grouped_barplot(
         cumulative_metrics_df[["method"] + PRQ_SRQ_RRQ_KEYS],
         prq_srq_rrq_plot_file_path,
     )
 
     tp_fp_fn_plot_file_path = runs_dir_path / "tp_fp_fn.png"
-    create_grouped_barplot(
+    save_grouped_barplot(
         cumulative_metrics_df[["method"] + TP_FP_FN_KEYS],
         tp_fp_fn_plot_file_path,
     )
 
     miou_plot_file_path = runs_dir_path / "miou.png"
-    create_grouped_barplot(
+    save_grouped_barplot(
         cumulative_metrics_df[["method", MIOU_KEY]],
         miou_plot_file_path,
     )
