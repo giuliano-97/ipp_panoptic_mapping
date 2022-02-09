@@ -1,5 +1,6 @@
 import argparse
 import csv
+import os
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def _load_label_map(label_map_file_path: Path):
 def main(dir_path: Path):
     assert dir_path.is_dir()
 
-    def map_fn(panmap_file_path: Path):
+    def remap_labels_fn(panmap_file_path: Path):
         pointcloud_file_path = panmap_file_path.with_suffix(".pointcloud.ply")
         if not pointcloud_file_path.is_file():
             return
@@ -61,8 +62,12 @@ def main(dir_path: Path):
             colors,
         )
 
+        # Remove the csv file
+        os.remove(str(label_map_file_path))
+        
+
     with ThreadPool(8) as p:
-        p.map(map_fn, dir_path.glob("**/*.panmap"))
+        p.map(remap_labels_fn, dir_path.glob("**/*.panmap"))
 
 
 def _parse_args():
