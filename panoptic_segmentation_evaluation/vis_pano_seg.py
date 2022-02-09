@@ -1,7 +1,5 @@
 import argparse
 import collections
-from multiprocessing import parent_process
-from turtle import color
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,61 +7,15 @@ import matplotlib.patches as mpatches
 from matplotlib import cm
 from PIL import Image
 
-from vis import color_palettes
-from vis import utils
-
-
-# TODO: put this elsewhere
-_STUFF_CLASSES = [1, 2, 22]
-_THINGS_CLASSES = list(set(range(41)) - set(_STUFF_CLASSES))
+import panoptic_segmentation_evaluation.visualization as vis_utils
+from common import (
+    NYU40_THING_CLASSES,
+    NYU40_CLASS_IDS_TO_NAMES,
+    NYU40_COLOR_PALETTE,
+    PANOPTIC_LABEL_DIVISOR,
+)
 
 _COLOR_PERTURBATION = 60  # Amount of color perturbation
-
-# TODO: configure this from CLI
-_LABEL_DIVISOR = 1000
-
-NYU40_CATEGORIES = {
-    1: "wall",
-    2: "floor",
-    3: "cabinet",
-    4: "bed",
-    5: "chair",
-    6: "sofa",
-    7: "table",
-    8: "door",
-    9: "window",
-    10: "bookshelf",
-    11: "picture",
-    12: "counter",
-    13: "blinds",
-    14: "desk",
-    15: "shelves",
-    16: "curtain",
-    17: "dresser",
-    18: "pillow",
-    19: "mirror",
-    20: "floor mat",
-    21: "clothes",
-    22: "ceiling",
-    23: "books",
-    24: "refridgerator",
-    25: "television",
-    26: "paper",
-    27: "towel",
-    28: "shower curtain",
-    29: "box",
-    30: "whiteboard",
-    31: "person",
-    32: "nightstand",
-    33: "toilet",
-    34: "sink",
-    35: "lamp",
-    36: "bathtub",
-    37: "bag",
-    38: "otherstructure",
-    39: "otherfurniture",
-    40: "otherprop",
-}
 
 
 def colorize_pano_seg(
@@ -85,7 +37,7 @@ def colorize_pano_seg(
 
     for semantic_value in unique_semantic_values:
         semantic_mask = semantic_result == semantic_value
-        if semantic_value in _THINGS_CLASSES:
+        if semantic_value in NYU40_THING_CLASSES:
             # For `thing` class, we will add a small amount of random noise to its
             # correspondingly predefined semantic segmentation colormap.
             unique_instance_values = np.unique(instance_result[semantic_mask])
@@ -94,7 +46,7 @@ def colorize_pano_seg(
                     semantic_mask, instance_result == instance_value
                 )
 
-                random_color = utils.perturb_color(
+                random_color = vis_utils.perturb_color(
                     color_palette[semantic_value],
                     _COLOR_PERTURBATION,
                     used_colors[semantic_value],
@@ -112,8 +64,8 @@ def colorize_pano_seg(
 def decode_single_channel_pano_seg(single_channel_pano_seg: np.ndarray):
     height, width = single_channel_pano_seg.shape[:2]
     pano_seg = np.zeros(shape=(height, width, 3), dtype=np.uint8)
-    pano_seg[:, :, 0] = single_channel_pano_seg // _LABEL_DIVISOR
-    pano_seg[:, :, 1] = single_channel_pano_seg % _LABEL_DIVISOR
+    pano_seg[:, :, 0] = single_channel_pano_seg // PANOPTIC_LABEL_DIVISOR
+    pano_seg[:, :, 1] = single_channel_pano_seg % PANOPTIC_LABEL_DIVISOR
     return pano_seg
 
 
@@ -130,7 +82,7 @@ def vis_pano_seg(
         pano_seg = decode_single_channel_pano_seg(pano_seg)
     assert np.max(pano_seg[:, :, 0] < 41), "Only nyu40 labels supported."
 
-    color_palette = color_palettes.get_nyu40_color_palette()
+    color_palette = np.array(NYU40_COLOR_PALETTE)
     colorized_pano_seg, _ = colorize_pano_seg(
         pano_seg,
         color_palette,
@@ -143,19 +95,19 @@ def vis_pano_seg(
     plt.imshow(colorized_pano_seg)
 
     legend_handles = []
-    for semantic_id in np.unique(pano_seg[:,:,0]):
+    for semantic_id in np.unique(pano_seg[:, :, 0]):
         if semantic_id > 0:
             legend_handles.append(
                 mpatches.Patch(
                     color=color_palette[semantic_id] / 255,
-                    label=NYU40_CATEGORIES[semantic_id],
+                    label=NYU40_CLASS_IDS_TO_NAMES[semantic_id],
                 )
             )
 
     plt.legend(
         handles=legend_handles,
         bbox_to_anchor=(1, 0),
-        loc='best',
+        loc="best",
     )
 
     plt.subplot(1, num_plots, 2)
@@ -186,7 +138,10 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "semantic_uncertainty_map_file", type=str, nargs="?", help="Path to uncertainty map"
+        "semantic_uncertainty_map_file",
+        type=str,
+        nargs="?",
+        help="Path to uncertainty map",
     )
 
     return parser.parse_args()

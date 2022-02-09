@@ -4,7 +4,7 @@ NYU40_THING_CLASSES = [i for i in range(41) if i not in NYU40_STUFF_CLASSES]
 
 NYU40_IGNORE_LABEL = 0
 
-MAP_NYU40_CLASS_IDS_TO_NAMES = {
+NYU40_CLASS_IDS_TO_NAMES = {
     1: "wall",
     2: "floor",
     3: "cabinet",
