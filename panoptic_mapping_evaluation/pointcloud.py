@@ -70,9 +70,10 @@ def get_world_to_grid_transform(points: np.ndarray, voxel_size: float = VOXEL_SI
     the voxel coordinates of each points.
     """
     t = np.floor(np.min(points, axis=0) - voxel_size).reshape(-1, 1)
+
     T_G_W = np.block(
         [
-            [np.identity(3) / voxel_size, -1 * t],
+            [np.identity(3) / voxel_size, -1 * t / voxel_size],
             [np.zeros((1, 3)), np.ones(1)],
         ]
     )
