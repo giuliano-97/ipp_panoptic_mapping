@@ -113,6 +113,8 @@ def evaluate_panoptic_reconstruction_quality(
             pred_matched.add(pred_panoptic_label)
 
     for gt_panoptic_label in gt_segment_areas:
+        if gt_panoptic_label == NYU40_IGNORE_LABEL:
+            continue
         if gt_panoptic_label in gt_matched:
             continue
         class_id = gt_panoptic_label // PANOPTIC_LABEL_DIVISOR
@@ -127,6 +129,8 @@ def evaluate_panoptic_reconstruction_quality(
             continue
         class_id = pred_panoptic_label // PANOPTIC_LABEL_DIVISOR
         if class_id == NYU40_IGNORE_LABEL:
+            continue
+        if pred_segment_areas[pred_panoptic_label] < constants.SEGMENT_MIN_NUM_VOXELS:
             continue
         fp_per_class[class_id] += 1
 
