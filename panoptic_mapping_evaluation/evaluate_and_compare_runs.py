@@ -84,22 +84,16 @@ def evaluate_and_compare_runs(
     cumulative_metrics_file_path = runs_dir_path / "metrics.csv"
     cumulative_metrics_df.to_csv(str(cumulative_metrics_file_path))
 
-    prq_srq_rrq_plot_file_path = runs_dir_path / "prq_srq_rrq.png"
+    prq_srq_rrq_miou_plot_file_path = runs_dir_path / "prq_srq_rrq_miou.png"
     save_grouped_barplot(
-        cumulative_metrics_df[["method"] + PRQ_SRQ_RRQ_KEYS],
-        prq_srq_rrq_plot_file_path,
+        cumulative_metrics_df[["method"] + PRQ_SRQ_RRQ_KEYS + [MIOU_KEY]],
+        prq_srq_rrq_miou_plot_file_path,
     )
 
     tp_fp_fn_plot_file_path = runs_dir_path / "tp_fp_fn.png"
     save_grouped_barplot(
         cumulative_metrics_df[["method"] + TP_FP_FN_KEYS],
         tp_fp_fn_plot_file_path,
-    )
-
-    miou_plot_file_path = runs_dir_path / "miou.png"
-    save_grouped_barplot(
-        cumulative_metrics_df[["method", MIOU_KEY]],
-        miou_plot_file_path,
     )
 
 
