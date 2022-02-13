@@ -124,6 +124,7 @@ def save_labeled_pointcloud(
     points: np.ndarray,
     labels: np.ndarray,
     colors: np.ndarray,
+    binary: Optional[bool] = True,
 ):
     labeled_pointcloud_data = np.array(
         [
@@ -145,4 +146,4 @@ def save_labeled_pointcloud(
     # Export the pointcloud as ply
     ply_element = PlyElement.describe(labeled_pointcloud_data, "vertex")
     with pcd_file_path.open("wb") as f:
-        PlyData([ply_element], text=True).write(f)
+        PlyData([ply_element], text=not binary).write(f)
