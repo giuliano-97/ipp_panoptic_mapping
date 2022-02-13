@@ -7,6 +7,45 @@ from plyfile import PlyData, PlyElement
 from panoptic_mapping_evaluation.constants import VOXEL_SIZE
 
 
+def load_pointcloud(pcd_file_path: Path):
+    ply_data = PlyData.read(str(pcd_file_path))
+    x = np.array(ply_data["vertex"].data["x"])
+    y = np.array(ply_data["vertex"].data["y"])
+    z = np.array(ply_data["vertex"].data["z"])
+    points = np.column_stack((x, y, z))
+    return points
+
+
+def make_occupancy_grid(points: np.ndarray, max_voxel_coord: Optional[np.ndarray] = None):
+    """
+    Given a list of 3d points, it returns
+    """
+    # Convert to grid coordinates
+    points_grid_coords = np.floor(points).astype(np.int64)
+
+    # Aggregate points belonging to the same cell
+    non_empty_cells_grid_coords = np.unique(points_grid_coords, axis=0)
+
+    # Convert to indices
+    indices = (
+        non_empty_cells_grid_coords[:, 0],
+        non_empty_cells_grid_coords[:, 1],
+        non_empty_cells_grid_coords[:, 2],
+    )
+
+    # Initialize empty occupancy grid
+    if max_voxel_coord is None:
+        max_voxel_coord = np.ceil(np.max(points, axis=0)).astype(np.int64)
+    occupancy_grid = np.zeros(shape=max_voxel_coord, dtype=bool)
+
+    # Set occupied cells
+    occupancy_grid[indices] = True
+
+    return occupancy_grid
+
+
+
+
 def load_labeled_pointcloud(pcd_file_path: Path, return_colors=False):
 
     ply_data = PlyData.read(str(pcd_file_path))
