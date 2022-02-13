@@ -189,14 +189,27 @@ def evaluate_run(
     # Comput the metrics for every map
     for pred_pointcloud_file_path in sorted(run_dir_path.glob("*.pointcloud.ply")):
 
-        logging.info(f"Evaluating {pred_pointcloud_file_path.name}")
+        name = pred_pointcloud_file_path.name.rstrip(".pointcloud.ply")
+        logging.info(f"Evaluating {name}")
 
         # Load the pointcloud
         pred_points, pred_labels = pcd_utils.load_labeled_pointcloud(
             pred_pointcloud_file_path
         )
 
-        # Make the panoptic grid
+        coverage_pcd_file_path = pred_pointcloud_file_path.parent / (
+            name + ".coverage.ply"
+        )
+        if coverage_pcd_file_path.is_file():
+            coverage_points = pcd_utils.load_pointcloud(coverage_pcd_file_path)
+            coverage_grid = pcd_utils.make_occupancy_grid(
+                points=utils.transform_points(coverage_points, T_G_W),
+                max_voxel_coord=gt_panoptic_grid.shape,
+            )
+        else:
+            coverage_grid = np.ones(gt_panoptic_grid.shape, dtype=bool)
+
+        # Make the prediction panoptic grid
         pred_panoptic_grid = pcd_utils.make_panoptic_grid(
             points=utils.transform_points(pred_points, T_G_W),
             labels=pred_labels,
@@ -208,10 +221,15 @@ def evaluate_run(
             "FrameID": pred_pointcloud_file_path.name.rstrip(".pointcloud.ply")
         }
 
+        # Set the label of all voxels which have not been observed to the ignore label
+        gt_panoptic_grid_covered = np.where(
+            coverage_grid, gt_panoptic_grid, NYU40_IGNORE_LABEL
+        )
+
         # Add PRQ, RRQ, SRQ, TP, FP, FN
         metrics_data_entry.update(
             evaluate_panoptic_reconstruction_quality(
-                gt_panoptic_grid,
+                gt_panoptic_grid_covered,
                 pred_panoptic_grid,
             )
         )
@@ -219,7 +237,7 @@ def evaluate_run(
         # Add mIoU
         metrics_data_entry.update(
             evaluate_mean_iou(
-                gt_panoptic_grid,
+                gt_panoptic_grid_covered,
                 pred_panoptic_grid,
             )
         )
