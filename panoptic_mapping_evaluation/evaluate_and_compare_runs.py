@@ -6,7 +6,7 @@ from typing import List
 import pandas as pd
 
 from constants import MIOU_KEY, PRQ_SRQ_RRQ_KEYS, TP_FP_FN_KEYS
-from graphing import save_grouped_barplot
+from graphing import save_grouped_barplot, save_trend_lineplot
 from panoptic_mapping_evaluation.evaluate_run import evaluate_run
 
 
@@ -23,6 +23,7 @@ def _find_runs(runs_dir_path: Path) -> List[Path]:
 def evaluate_and_compare_runs(
     scan_dir_path: Path,
     runs_dir_path: Path,
+    overwrite: bool,
 ):
     assert scan_dir_path.is_dir()
 
@@ -41,8 +42,8 @@ def evaluate_and_compare_runs(
         logging.info(f"Evaluating run: {run_dir_path.name}")
 
         metrics_file_path = run_dir_path / "metrics.csv"
-        if metrics_file_path.is_file():
-            metrics_df = pd.read_csv(str(metrics_file_path))
+        if not overwrite and metrics_file_path.is_file():
+            metrics_df = pd.read_csv(str(metrics_file_path), index_col="FrameID")
         else:
             metrics_df = evaluate_run(
                 run_dir_path=run_dir_path,
@@ -56,6 +57,18 @@ def evaluate_and_compare_runs(
                 continue
 
             metrics_df.to_csv(str(metrics_file_path))
+
+        qualities_trend_lineplot_file_path = run_dir_path / "prq_rrq_srq_miou_trend.png"
+        save_trend_lineplot(
+            metrics_df[PRQ_SRQ_RRQ_KEYS + [MIOU_KEY]].reset_index(),
+            qualities_trend_lineplot_file_path,
+        )
+
+        tp_fp_fn_trend_lineplot_file_path = run_dir_path / "tp_fp_fn_trend.png"
+        save_trend_lineplot(
+            metrics_df[TP_FP_FN_KEYS].reset_index(),
+            tp_fp_fn_trend_lineplot_file_path,
+        )
 
         final_map_data = metrics_df.tail(1).copy()
         final_map_data["method"] = run_dir_path.name
@@ -110,6 +123,12 @@ def _parse_args():
         help="Path to the directory containing the groundtruth scan data.",
     )
 
+    parser.add_argument(
+        "--overwrite",
+        action='store_true',
+        help="Whether existing metrics should be recomputed."
+    )
+
     return parser.parse_args()
 
 
@@ -118,4 +137,5 @@ if __name__ == "__main__":
     evaluate_and_compare_runs(
         scan_dir_path=args.scan_dir,
         runs_dir_path=args.runs_dir,
+        overwrite=args.overwrite,
     )
