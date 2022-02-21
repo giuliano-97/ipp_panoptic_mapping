@@ -1,9 +1,6 @@
 import argparse
 from pathlib import Path
 
-import numpy as np
-from plyfile import PlyData, PlyElement
-
 import pointcloud as pcd_utils
 from scannet_utils import create_labeled_pointcloud_from_scan_groundtruth
 
