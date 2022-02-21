@@ -1,16 +1,14 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Mapping, Dict, List, Optional
+from typing import Mapping, Dict
 
 import numpy as np
 import pandas as pd
-from sklearn import metrics
 
-import panoptic_mapping_evaluation.pointcloud as pcd_utils
-import panoptic_mapping_evaluation.utils as utils
-import panoptic_mapping_evaluation.constants as constants
-from common import (
+import pointcloud as pcd_utils
+import constants as constants
+from utils.common import (
     NYU40_IGNORE_LABEL,
     PANOPTIC_LABEL_DIVISOR,
     NYU40_THING_CLASSES,
@@ -214,7 +212,7 @@ def evaluate_run(
 
     # Transform and voxelize the groundtruth pointcloud
     gt_panoptic_grid = pcd_utils.make_panoptic_grid(
-        points=utils.transform_points(points, T_G_W),
+        points=pcd_utils.transform_points(points, T_G_W),
         labels=labels,
     )
 
@@ -237,7 +235,7 @@ def evaluate_run(
         if coverage_pcd_file_path.is_file():
             coverage_points = pcd_utils.load_pointcloud(coverage_pcd_file_path)
             coverage_grid = pcd_utils.make_occupancy_grid(
-                points=utils.transform_points(coverage_points, T_G_W),
+                points=pcd_utils.transform_points(coverage_points, T_G_W),
                 max_voxel_coord=gt_panoptic_grid.shape,
             )
         else:
@@ -245,7 +243,7 @@ def evaluate_run(
 
         # Make the prediction panoptic grid
         pred_panoptic_grid = pcd_utils.make_panoptic_grid(
-            points=utils.transform_points(pred_points, T_G_W),
+            points=pcd_utils.transform_points(pred_points, T_G_W),
             labels=pred_labels,
             max_voxel_coord=gt_panoptic_grid.shape,
         )

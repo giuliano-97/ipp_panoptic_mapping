@@ -7,7 +7,7 @@ import pandas as pd
 
 from constants import MIOU_KEY, PRQ_SRQ_RRQ_KEYS, TP_FP_FN_KEYS
 from graphing import save_grouped_barplot, save_trend_lineplot
-from panoptic_mapping_evaluation.evaluate_run import evaluate_run
+from evaluate_run import evaluate_run
 
 
 def _find_runs(runs_dir_path: Path) -> List[Path]:

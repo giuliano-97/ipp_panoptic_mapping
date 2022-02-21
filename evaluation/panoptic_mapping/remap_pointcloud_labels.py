@@ -5,7 +5,11 @@ from multiprocessing.pool import ThreadPool
 from pathlib import Path
 
 import pointcloud as pcd_utils
-from common import PANOPTIC_LABEL_DIVISOR, NYU40_STUFF_CLASSES, NYU40_THING_CLASSES
+from utils.common import (
+    PANOPTIC_LABEL_DIVISOR,
+    NYU40_STUFF_CLASSES,
+    NYU40_THING_CLASSES,
+)
 
 
 def _load_label_map(label_map_file_path: Path):
@@ -64,7 +68,6 @@ def main(dir_path: Path):
 
         # Remove the csv file
         os.remove(str(label_map_file_path))
-        
 
     with ThreadPool(8) as p:
         p.map(remap_labels_fn, dir_path.glob("**/*.panmap"))

@@ -2,7 +2,7 @@ import matplotlib as mpl
 import numpy as np
 import open3d as o3d
 
-from panoptic_mapping_evaluation.constants import VOXEL_SIZE
+from constants import VOXEL_SIZE
 
 
 def visualize_voxelized_labeled_pointcloud(
