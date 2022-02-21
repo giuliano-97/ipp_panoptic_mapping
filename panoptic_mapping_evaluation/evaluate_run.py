@@ -10,7 +10,13 @@ from sklearn import metrics
 import panoptic_mapping_evaluation.pointcloud as pcd_utils
 import panoptic_mapping_evaluation.utils as utils
 import panoptic_mapping_evaluation.constants as constants
-from common import NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
+from common import (
+    NYU40_IGNORE_LABEL,
+    PANOPTIC_LABEL_DIVISOR,
+    NYU40_THING_CLASSES,
+    NYU40_STUFF_CLASSES,
+    SCANNET_NYU40_EVALUATION_CLASSES,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -38,9 +44,14 @@ def evaluate_mean_iou(
     gt_semantic_grid = gt_panoptic_grid // PANOPTIC_LABEL_DIVISOR
     pred_semantic_grid = pred_panoptic_grid // PANOPTIC_LABEL_DIVISOR
 
-    # Only evaluate over classes that appear in the GT and are not the ignore label
-    valid_classes = np.unique(gt_semantic_grid)
-    valid_classes = valid_classes[valid_classes != NYU40_IGNORE_LABEL]
+    # Only evaluate over classes that appear in the GT, are not the ignore label
+    # and are in the list of classes on which one should evaluate
+    valid_classes = np.unique(gt_semantic_grid).tolist()
+    valid_classes = [
+        c
+        for c in valid_classes
+        if c != NYU40_IGNORE_LABEL and c in SCANNET_NYU40_EVALUATION_CLASSES
+    ]
 
     # Compute IoU for every valid class
     for class_id in valid_classes:
@@ -141,7 +152,21 @@ def evaluate_panoptic_reconstruction_quality(
         )
     prq_per_class = np.multiply(srq_per_class, rrq_per_class)
 
-    valid_classes_mask = np.not_equal(tp_per_class + fp_per_class + fn_per_class, 0)
+    # Evaluate only on classes used in the ScanNet benchmark
+    valid_classes_mask = np.zeros(_NUM_CLASSES, dtype=bool)
+    valid_classes_mask[np.array(SCANNET_NYU40_EVALUATION_CLASSES) - 1] = True
+
+    # Evaluate only on classes which appear at least once in the groundtruth
+    valid_classes_mask = valid_classes_mask & np.not_equal(
+        tp_per_class + fp_per_class + fn_per_class, 0
+    )
+
+    valid_thing_classes_mask = np.zeros(_NUM_CLASSES, dtype=bool)
+    valid_thing_classes_mask[np.array(NYU40_THING_CLASSES) - 1] = True
+    valid_thing_classes_mask = valid_classes_mask & valid_thing_classes_mask
+    valid_stuff_classes_mask = np.zeros(_NUM_CLASSES, dtype=bool)
+    valid_stuff_classes_mask[np.array(NYU40_STUFF_CLASSES) - 1] = True
+    valid_stuff_classes_mask = valid_classes_mask & valid_stuff_classes_mask
 
     qualities_per_class = np.row_stack((prq_per_class, srq_per_class, rrq_per_class))
 
@@ -152,6 +177,9 @@ def evaluate_panoptic_reconstruction_quality(
         axis=1,
     )
 
+    prq_th = np.mean(qualities_per_class[0, valid_thing_classes_mask], axis=1)
+    prq_st = np.mean(qualities_per_class[0, valid_stuff_classes_mask], axis=1)
+
     tp, fp, fn = np.sum(
         counts_per_class[:, valid_classes_mask],
         axis=1,
@@ -159,6 +187,8 @@ def evaluate_panoptic_reconstruction_quality(
 
     return {
         constants.PRQ_KEY: prq,
+        constants.PRQ_THING_KEY: prq_th,
+        constants.PRQ_STUFF_KEY: prq_st,
         constants.SRQ_KEY: srq,
         constants.RRQ_KEY: rrq,
         constants.TP_KEY: tp,
@@ -222,7 +252,7 @@ def evaluate_run(
 
         # Create new metrics data entry
         metrics_data_entry = {
-            "FrameID": pred_pointcloud_file_path.name.rstrip(".pointcloud.ply")
+            "FrameID": int(pred_pointcloud_file_path.name.rstrip(".pointcloud.ply"))
         }
 
         # Set the label of all voxels which have not been observed to the ignore label
