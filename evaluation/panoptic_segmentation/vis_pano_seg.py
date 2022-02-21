@@ -7,8 +7,8 @@ import matplotlib.patches as mpatches
 from matplotlib import cm
 from PIL import Image
 
-import panoptic_segmentation_evaluation.visualization as vis_utils
-from common import (
+import visualization as vis_utils
+from utils.common import (
     NYU40_THING_CLASSES,
     NYU40_CLASS_IDS_TO_NAMES,
     NYU40_COLOR_PALETTE,

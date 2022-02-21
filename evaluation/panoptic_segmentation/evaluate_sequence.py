@@ -8,9 +8,7 @@ import pandas as pd
 import tensorflow as tf
 from PIL import Image
 
-import time
-
-from panoptic_segmentation_evaluation.panoptic_quality import PanopticQuality
+from panoptic_quality import PanopticQuality
 
 logging.basicConfig(level=logging.INFO)
 

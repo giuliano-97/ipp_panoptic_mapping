@@ -11,7 +11,7 @@ from typing import Dict, List
 import numpy as np
 from PIL import Image
 
-from common import PANOPTIC_LABEL_DIVISOR, NYU40_STUFF_CLASSES
+from utils.common import PANOPTIC_LABEL_DIVISOR, NYU40_STUFF_CLASSES
 
 _SEMANTIC_MAPS_ARCHIVE_SUFFIX = "_2d-label-filt.zip"
 _INSTANCE_MAPS_ARCHIVE_SUFFIX = "_2d-instance-filt.zip"
