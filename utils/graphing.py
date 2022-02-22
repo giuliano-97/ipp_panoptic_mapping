@@ -10,12 +10,15 @@ import seaborn as sns
 plt.ioff()
 
 
+_DEFAULT_FIGURE_SIZE=(16, 9)
+
+
 def save_grouped_barplot(
     metrics_df: pd.DataFrame,
     barplot_file_path: Path,
     pivot_column: str = "method",
 ):
-    plt.figure(figsize=(15, 8))
+    plt.figure(figsize=(_DEFAULT_FIGURE_SIZE))
 
     # Convert metrics dataframe from wide to long format
     metrics_df_long = pd.melt(metrics_df, id_vars=[pivot_column], var_name="metric")
@@ -26,8 +29,8 @@ def save_grouped_barplot(
         x=pivot_column,
         y="value",
         hue="metric",
-        height=8,
-        aspect=15 / 8,
+        height=_DEFAULT_FIGURE_SIZE[1],
+        aspect=_DEFAULT_FIGURE_SIZE[0] / _DEFAULT_FIGURE_SIZE[1],
     )
 
     # Configure plot
@@ -46,6 +49,7 @@ def save_trend_lineplot(
     lineplot_file_path: Path,
     pivot_column: Optional[str] = "FrameID",
 ):
+    plt.figure(figsize=_DEFAULT_FIGURE_SIZE)
     metrics_df_long = pd.melt(metrics_df, id_vars=[pivot_column], var_name="metric")
     ax = sns.lineplot(
         data=metrics_df_long, x=pivot_column, y="value", hue="metric", style="metric"
