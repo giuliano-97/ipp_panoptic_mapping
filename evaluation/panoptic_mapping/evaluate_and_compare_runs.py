@@ -45,10 +45,17 @@ def evaluate_and_compare_runs(
         if not overwrite and metrics_file_path.is_file():
             metrics_df = pd.read_csv(str(metrics_file_path), index_col="FrameID")
         else:
-            metrics_df = evaluate_run(
-                run_dir_path=run_dir_path,
-                gt_pointcloud_file_path=gt_pointcloud_file_path,
-            )
+            try:
+                metrics_df = evaluate_run(
+                    run_dir_path=run_dir_path,
+                    gt_pointcloud_file_path=gt_pointcloud_file_path,
+                )
+            except Exception as e:
+                logging.error(
+                    f"Run {run_dir_path.name} could not be evaluated: {str(e)}."
+                    "Skipped."
+                )
+                continue
 
             if metrics_df is None:
                 logging.warning(
@@ -119,8 +126,8 @@ def _parse_args():
 
     parser.add_argument(
         "--overwrite",
-        action='store_true',
-        help="Whether existing metrics should be recomputed."
+        action="store_true",
+        help="Whether existing metrics should be recomputed.",
     )
 
     return parser.parse_args()
