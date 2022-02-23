@@ -175,8 +175,8 @@ def evaluate_panoptic_reconstruction_quality(
         axis=1,
     )
 
-    prq_th = np.mean(qualities_per_class[0, valid_thing_classes_mask], axis=1)
-    prq_st = np.mean(qualities_per_class[0, valid_stuff_classes_mask], axis=1)
+    prq_th = np.mean(qualities_per_class[0][valid_thing_classes_mask])
+    prq_st = np.mean(qualities_per_class[0][valid_stuff_classes_mask])
 
     tp, fp, fn = np.sum(
         counts_per_class[:, valid_classes_mask],
