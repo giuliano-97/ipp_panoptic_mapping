@@ -4,7 +4,7 @@ from typing import Dict, List
 
 import numpy as np
 
-import pointcloud as pcd_utils
+import evaluation.panoptic_mapping.pointcloud as pcd_utils
 from utils.common import NYU40_STUFF_CLASSES, NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
 
 _SEMANTIC_LABELED_MESH_FILE_TEMPLATE = "{}_vh_clean_2.labels.ply"

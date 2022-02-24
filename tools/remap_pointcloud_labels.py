@@ -4,7 +4,7 @@ import os
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
 
-import pointcloud as pcd_utils
+import evaluation.panoptic_mapping.pointcloud as pcd_utils
 from utils.common import (
     PANOPTIC_LABEL_DIVISOR,
     NYU40_STUFF_CLASSES,
