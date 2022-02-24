@@ -9,10 +9,26 @@ PRQ_THING_KEY = "PRQ_th"
 PRQ_STUFF_KEY = "PRQ_st"
 SRQ_KEY = "SRQ"
 RRQ_KEY = "RRQ"
+
+PQ_KEY = "PQ"
+PQ_THING_KEY = "PQ_th"
+PQ_STUFF_KEY = "PQ_st"
+SQ_KEY = "SQ"
+RQ_KEY = "RQ"
+
 TP_KEY = "TP"
 FP_KEY = "FP"
 FN_KEY = "FN"
+
 MIOU_KEY = "mIoU"
+
+PQ_SQ_RQ_KEYS = [
+    PQ_KEY,
+    PQ_THING_KEY,
+    PQ_STUFF_KEY,
+    SQ_KEY,
+    RQ_KEY,
+]
 
 PRQ_SRQ_RRQ_KEYS = [
     PRQ_KEY,
