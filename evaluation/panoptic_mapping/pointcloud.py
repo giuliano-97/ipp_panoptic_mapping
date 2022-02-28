@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 from plyfile import PlyData, PlyElement
 
-from constants import VOXEL_SIZE
+from evaluation.panoptic_mapping.constants import VOXEL_SIZE
 
 
 def load_pointcloud(pcd_file_path: Path):
@@ -16,15 +16,14 @@ def load_pointcloud(pcd_file_path: Path):
     return points
 
 
-def make_occupancy_grid(points: np.ndarray, max_voxel_coord: Optional[np.ndarray] = None):
-    """
-    Given a list of 3d points, it returns
-    """
-    # Convert to grid coordinates
-    points_grid_coords = np.floor(points).astype(np.int64)
+def make_occupancy_grid(
+    points_gc: np.ndarray,
+    max_voxel_coord: np.ndarray,
+):
+    """Generates a dense occupancy grid from a list of points in grid coordinates"""
 
     # Aggregate points belonging to the same cell
-    non_empty_cells_grid_coords = np.unique(points_grid_coords, axis=0)
+    non_empty_cells_grid_coords = np.unique(points_gc, axis=0)
 
     # Convert to indices
     indices = (
@@ -34,16 +33,12 @@ def make_occupancy_grid(points: np.ndarray, max_voxel_coord: Optional[np.ndarray
     )
 
     # Initialize empty occupancy grid
-    if max_voxel_coord is None:
-        max_voxel_coord = np.ceil(np.max(points, axis=0)).astype(np.int64)
     occupancy_grid = np.zeros(shape=max_voxel_coord, dtype=bool)
 
     # Set occupied cells
     occupancy_grid[indices] = True
 
     return occupancy_grid
-
-
 
 
 def load_labeled_pointcloud(pcd_file_path: Path, return_colors=False):
@@ -68,22 +63,14 @@ def load_labeled_pointcloud(pcd_file_path: Path, return_colors=False):
 
 
 def make_panoptic_grid(
-    points: np.ndarray,
+    points_gc: np.ndarray,
     labels: np.ndarray,
-    max_voxel_coord: Optional[np.ndarray] = None,
+    max_voxel_coord: np.ndarray,
 ):
-    """Build a 3D grid where each entry is assigned panoptic label."""
-    # Convert all points to voxel coordinates
-    points_voxel_coords = np.floor(points).astype(np.int32)
-
     # Aggregate all points belong to the same voxels and their inverse index
-    non_empty_voxels, inv_idx = np.unique(
-        points_voxel_coords, return_inverse=True, axis=0
-    )
+    non_empty_voxels, inv_idx = np.unique(points_gc, return_inverse=True, axis=0)
 
     # Initialize grid
-    if max_voxel_coord is None:
-        max_voxel_coord = np.ceil(np.max(points, axis=0)).astype(np.int32)
     voxel_grid = np.zeros(shape=max_voxel_coord, dtype=np.int32)
 
     # Fill voxel grid
@@ -167,3 +154,20 @@ def transform_points(
 
     # Dehomogenize, tranpose, and return
     return np.transpose(tranformed_points_h_t[:3, :])
+
+
+def convert_points_to_grid_coordinates(
+    points: np.ndarray,
+    w2g_transform: np.ndarray,
+    max_grid_coord=None,
+):
+    # Transform points to the grid coordinate frame
+    points_g = transform_points(points, w2g_transform)
+
+    # Convert points to grid coordinates
+    grid_coordinates = np.floor(points_g)
+
+    # Clamp to the grid boundaries (only first octant)
+    grid_coordinates = np.clip(grid_coordinates, a_min=(0, 0, 0), a_max=max_grid_coord)
+
+    return grid_coordinates.astype(np.int32)

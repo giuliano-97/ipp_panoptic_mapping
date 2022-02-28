@@ -5,9 +5,7 @@ from typing import List
 
 import pandas as pd
 
-from constants import MIOU_KEY, PRQ_SRQ_RRQ_KEYS, TP_FP_FN_KEYS
-from utils.graphing import save_grouped_barplot, save_trend_lineplot
-from evaluate_run import evaluate_run
+from evaluate_single_run import evaluate_run
 
 
 def _find_runs(runs_dir_path: Path) -> List[Path]:
@@ -65,18 +63,6 @@ def evaluate_and_compare_runs(
 
             metrics_df.to_csv(str(metrics_file_path))
 
-        qualities_trend_lineplot_file_path = run_dir_path / "prq_rrq_srq_miou_trend.png"
-        save_trend_lineplot(
-            metrics_df[PRQ_SRQ_RRQ_KEYS + [MIOU_KEY]].reset_index(),
-            qualities_trend_lineplot_file_path,
-        )
-
-        tp_fp_fn_trend_lineplot_file_path = run_dir_path / "tp_fp_fn_trend.png"
-        save_trend_lineplot(
-            metrics_df[TP_FP_FN_KEYS].reset_index(),
-            tp_fp_fn_trend_lineplot_file_path,
-        )
-
         final_map_data = metrics_df.tail(1).copy()
         final_map_data["method"] = run_dir_path.name
         cumulative_metrics_data.append(final_map_data)
@@ -90,18 +76,6 @@ def evaluate_and_compare_runs(
 
     cumulative_metrics_file_path = runs_dir_path / "metrics.csv"
     cumulative_metrics_df.to_csv(str(cumulative_metrics_file_path))
-
-    prq_srq_rrq_miou_plot_file_path = runs_dir_path / "prq_srq_rrq_miou.png"
-    save_grouped_barplot(
-        cumulative_metrics_df[["method"] + PRQ_SRQ_RRQ_KEYS + [MIOU_KEY]],
-        prq_srq_rrq_miou_plot_file_path,
-    )
-
-    tp_fp_fn_plot_file_path = runs_dir_path / "tp_fp_fn.png"
-    save_grouped_barplot(
-        cumulative_metrics_df[["method"] + TP_FP_FN_KEYS],
-        tp_fp_fn_plot_file_path,
-    )
 
 
 def _parse_args():
