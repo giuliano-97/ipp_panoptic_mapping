@@ -59,7 +59,7 @@ def create_labeled_pointcloud_from_scan_groundtruth(
     segments_to_object_id = _get_segments_to_object_id_dict(seg_groups)
 
     # Load the semantic mesh as a pointcloud with colors and labels
-    points, colors, semantic_labels = pcd_utils.load_labeled_pointcloud(
+    points, semantic_labels, colors = pcd_utils.load_labeled_pointcloud(
         semantic_mesh_file_path,
         return_colors=True,
     )
@@ -74,4 +74,4 @@ def create_labeled_pointcloud_from_scan_groundtruth(
             # Add 1 because object ids start at 0
             panoptic_labels[idx] += instance_id + 1
 
-    return points, colors, panoptic_labels
+    return points, panoptic_labels, colors

@@ -39,7 +39,7 @@ if __name__ == "__main__":
     else:
         out_dir_path = args.out_dir
 
-    points, colors, labels = create_labeled_pointcloud_from_scan_groundtruth(
+    points, labels, colors = create_labeled_pointcloud_from_scan_groundtruth(
         args.scan_dir_path,
     )
 
