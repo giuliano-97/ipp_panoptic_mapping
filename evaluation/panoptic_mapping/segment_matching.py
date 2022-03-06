@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from typing import Mapping, Dict
+from typing import Mapping, Dict, Set, Optional
 
 import numpy as np
-from constants import TP_IOU_THRESHOLD, SEGMENT_MIN_NUM_VOXELS
+from .constants import TP_IOU_THRESHOLD, SEGMENT_MIN_NUM_VOXELS
 from utils.common import NYU40_NUM_CLASSES, NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
 
 
@@ -15,8 +15,9 @@ class SegmentMatchingResult:
     iou_per_class: np.ndarray
     fp_per_class: np.ndarray
     fn_per_class: np.ndarray
-    tp_matches: Dict
-    fp_matches: Dict
+    tp_matches: Dict[int, int]
+    fp_matches: Dict[int, int]
+    fps: Optional[Set[int]] = None
 
 
 def _ids_to_counts(id_grid: np.ndarray) -> Mapping[int, int]:
@@ -37,6 +38,7 @@ def match_segments(
     tp_per_class = np.zeros(NYU40_NUM_CLASSES, dtype=np.float64)
     fp_per_class = np.zeros(NYU40_NUM_CLASSES, dtype=np.float64)
     fn_per_class = np.zeros(NYU40_NUM_CLASSES, dtype=np.float64)
+    fps = set()
 
     gt_segment_areas = _ids_to_counts(gt_labels)
     pred_segment_areas = _ids_to_counts(pred_labels)
@@ -76,7 +78,7 @@ def match_segments(
         if iou > match_iou_threshold:
             # Sanity check on FP mathces
             if gt_class_id != pred_class_id:
-                fp_matches.update({pred_panoptic_label, gt_panoptic_label})
+                fp_matches.update({pred_panoptic_label: gt_panoptic_label})
                 continue
             # Record a TP
             tp_per_class[gt_class_id] += 1
@@ -106,6 +108,7 @@ def match_segments(
         if pred_segment_areas[pred_panoptic_label] < fp_min_area:
             continue
         fp_per_class[class_id] += 1
+        fps.add(pred_panoptic_label)
 
     return SegmentMatchingResult(
         tp_per_class=tp_per_class,
@@ -114,4 +117,5 @@ def match_segments(
         fn_per_class=fn_per_class,
         tp_matches=tp_matches,
         fp_matches=fp_matches,
+        fps=fps,
     )

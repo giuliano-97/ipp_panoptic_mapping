@@ -3,7 +3,12 @@ import logging
 
 import numpy as np
 
-from utils.common import PANOPTIC_LABEL_DIVISOR, NYU40_THING_CLASSES
+from utils.common import (
+    NYU40_IGNORE_LABEL,
+    NYU40_STUFF_CLASSES,
+    PANOPTIC_LABEL_DIVISOR,
+    NYU40_THING_CLASSES,
+)
 
 
 def perturb_color(
@@ -48,7 +53,13 @@ def perturb_color(
 
 def colorize_panoptic_labels(panoptic_labels, color_palette):
 
-    colors = np.zeros(shape=(panoptic_labels.shape[0], 3), dtype=np.uint8)
+    if len(panoptic_labels.shape) == 2:
+        colors = np.zeros(
+            shape=(panoptic_labels.shape[0], panoptic_labels.shape[1], 3),
+            dtype=np.uint8,
+        )
+    else:
+        colors = np.zeros(shape=(panoptic_labels.shape[0], 3), dtype=np.uint8)
 
     semantic_labels = panoptic_labels // PANOPTIC_LABEL_DIVISOR
     instance_ids = panoptic_labels % PANOPTIC_LABEL_DIVISOR
@@ -59,7 +70,14 @@ def colorize_panoptic_labels(panoptic_labels, color_palette):
 
     for semantic_value in unique_semantic_values:
         semantic_mask = semantic_labels == semantic_value
-        if semantic_value in NYU40_THING_CLASSES:
+        if (
+            semantic_value == NYU40_IGNORE_LABEL
+            or semantic_value in NYU40_STUFF_CLASSES
+        ):
+            # For `stuff` class, we use the defined semantic color.
+            colors[semantic_mask] = color_palette[semantic_value]
+            used_colors[semantic_value].add(tuple(color_palette[semantic_value]))
+        elif semantic_value in NYU40_THING_CLASSES:
             # For `thing` class, we will add a small amount of random noise to its
             # correspondingly predefined semantic segmentation colormap.
             unique_instance_values = np.unique(instance_ids[semantic_mask])
@@ -75,9 +93,5 @@ def colorize_panoptic_labels(panoptic_labels, color_palette):
                     random_state=np_state,
                 )
                 colors[instance_mask] = random_color
-        else:
-            # For `stuff` class, we use the defined semantic color.
-            colors[semantic_mask] = color_palette[semantic_value]
-            used_colors[semantic_value].add(tuple(color_palette[semantic_value]))
 
     return colors, used_colors
