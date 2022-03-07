@@ -110,12 +110,6 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "--order-instance-ids",
-        action='store_true',
-        help="Where instance ids should be adjusted to be integers in a continuous range."
-    )
-
-    parser.add_argument(
         "-o",
         "--out-dir",
         type=lambda p: Path(p).expanduser(),
