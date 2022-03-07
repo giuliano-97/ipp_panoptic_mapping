@@ -1,8 +1,8 @@
+import argparse
 import json
-from pathlib import Path
-from typing import Dict, List
-
 import numpy as np
+from pathlib import Path
+from typing import List, Optional
 
 import evaluation.panoptic_mapping.pointcloud as pcd_utils
 from utils.common import NYU40_STUFF_CLASSES, NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
@@ -25,10 +25,17 @@ def _get_segments_to_object_id_dict(seg_groups: List):
     return segment_to_object_id
 
 
-def create_labeled_pointcloud_from_scan_groundtruth(
+def main(
     scan_dir_path: Path,
+    out_dir_path: Optional[Path],
 ):
     assert scan_dir_path.is_dir()
+
+    if out_dir_path is None:
+        out_dir_path = scan_dir_path
+    else:
+        out_dir_path = out_dir_path
+
     scene_name = scan_dir_path.stem
 
     # Check all the necessary files are there
@@ -74,4 +81,50 @@ def create_labeled_pointcloud_from_scan_groundtruth(
             # Add 1 because object ids start at 0
             panoptic_labels[idx] += instance_id + 1
 
-    return points, panoptic_labels, colors
+    labeled_pointcloud_file_path = out_dir_path / (
+        out_dir_path.name + ".pointcloud.ply"
+    )
+
+    pcd_utils.save_labeled_pointcloud(
+        labeled_pointcloud_file_path,
+        points,
+        panoptic_labels,
+        colors,
+    )
+
+
+def _parse_args():
+
+    parser = argparse.ArgumentParser(
+        description="""
+        Create a pointcloud with panoptic labels from the 3D annotations of a ScanNet V2 scan.
+        The resulting pointcloud will be saved as a .ply pointcloud in which the "label" propery
+        of every vertex represents its panoptic label in the format SEMANTIC_ID * 1000 + INSTANCE_ID.
+        """
+    )
+
+    parser.add_argument(
+        "scan_dir_path",
+        type=lambda p: Path(p).expanduser(),
+        help="Path to the scan directory.",
+    )
+
+    parser.add_argument(
+        "--order-instance-ids",
+        action='store_true',
+        help="Where instance ids should be adjusted to be integers in a continuous range."
+    )
+
+    parser.add_argument(
+        "-o",
+        "--out-dir",
+        type=lambda p: Path(p).expanduser(),
+        help="Path to the directory where the labeled pointcloud should be saved.",
+    )
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = _parse_args()
+    main(args.scan_dir_path, args.out_dir)
