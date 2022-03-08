@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import List, Optional
 
 import evaluation.panoptic_mapping.pointcloud as pcd_utils
-from utils.common import NYU40_STUFF_CLASSES, NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
+from utils.common import (
+    NYU40_STUFF_CLASSES,
+    NYU40_IGNORE_LABEL,
+    PANOPTIC_LABEL_DIVISOR,
+    NYU40_COLOR_PALETTE,
+)
+from utils.visualization import colorize_panoptic_labels
 
 _SEMANTIC_LABELED_MESH_FILE_TEMPLATE = "{}_vh_clean_2.labels.ply"
 _SEGS_FILE_TEMPLATE = "{}_vh_clean_2.0.010000.segs.json"
@@ -66,30 +72,48 @@ def main(
     segments_to_object_id = _get_segments_to_object_id_dict(seg_groups)
 
     # Load the semantic mesh as a pointcloud with colors and labels
-    points, semantic_labels, colors = pcd_utils.load_labeled_pointcloud(
-        semantic_mesh_file_path,
-        return_colors=True,
+    points, semantic_labels, original_colors = pcd_utils.load_labeled_pointcloud(
+        semantic_mesh_file_path, return_colors=True
     )
 
     # Generate panoptic labels
     panoptic_labels = np.zeros_like(semantic_labels, dtype=np.uint32)
+    object_id_to_instance_id = dict()
+    next_valid_instance_id = 0
     for idx, semantic_label in enumerate(semantic_labels):
         panoptic_labels[idx] = semantic_label * PANOPTIC_LABEL_DIVISOR
         if _is_thing(semantic_label):
-            seg_group = seg_indices[idx]
-            instance_id = segments_to_object_id[seg_group]
+            object_id = segments_to_object_id[seg_indices[idx]]
+            instance_id = object_id_to_instance_id.get(object_id, None)
+            if instance_id is None:
+                # Grab the next valid instance id
+                while (
+                    next_valid_instance_id == NYU40_IGNORE_LABEL
+                    or next_valid_instance_id in NYU40_STUFF_CLASSES
+                ):
+                    next_valid_instance_id += 1
+                instance_id = next_valid_instance_id
+                object_id_to_instance_id[object_id] = instance_id
+                next_valid_instance_id += 1
+
             # Add 1 because object ids start at 0
-            panoptic_labels[idx] += instance_id + 1
+            panoptic_labels[idx] += instance_id
 
     labeled_pointcloud_file_path = out_dir_path / (
         out_dir_path.name + ".pointcloud.ply"
     )
 
+    # Create new colors
+    new_colors, _ = colorize_panoptic_labels(panoptic_labels, NYU40_COLOR_PALETTE)
+
+    # Add alpha channel
+    new_colors = np.insert(new_colors, 3, values=original_colors[:, 3], axis=1)
+
     pcd_utils.save_labeled_pointcloud(
         labeled_pointcloud_file_path,
         points,
         panoptic_labels,
-        colors,
+        new_colors,
     )
 
 

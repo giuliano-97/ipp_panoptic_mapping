@@ -55,13 +55,13 @@ def main(
         for label, color in zip(labels, colors):
             if label == NYU40_IGNORE_LABEL:
                 continue
-            instance_id = label
             class_id = label // PANOPTIC_LABEL_DIVISOR
-            label_code = (
-                _BACKGROUND_LABELS_CODE
-                if class_id in NYU40_STUFF_CLASSES
-                else _INSTANCE_LABEL_CODE
-            )
+            if class_id in NYU40_STUFF_CLASSES:
+                instance_id = class_id
+                label_code = _BACKGROUND_LABELS_CODE
+            else:
+                instance_id = label % PANOPTIC_LABEL_DIVISOR
+                label_code = _INSTANCE_LABEL_CODE
             r, g, b = color
             name = NYU40_CLASS_IDS_TO_NAMES[class_id]
             if class_id in NYU40_THING_CLASSES:
