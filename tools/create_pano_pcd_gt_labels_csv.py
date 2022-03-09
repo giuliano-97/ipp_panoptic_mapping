@@ -29,8 +29,8 @@ _FIELDS = [
     "Size",
 ]
 
+_BACKGROUND_LABELS_CODE = 0
 _INSTANCE_LABEL_CODE = 1
-_BACKGROUND_LABELS_CODE = 2
 
 
 def main(
