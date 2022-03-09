@@ -118,7 +118,7 @@ def generate_deeplab2_panoptic_map(
     panoptic_map_image.save(str(panoptic_map_file_path))
 
 
-def _create_panoptic_maps_for_scan(
+def create_panoptic_maps_for_scan(
     scan_dir_path: Path,
     remove_semantic_and_instance: bool,
     compress: bool,
@@ -206,7 +206,7 @@ def _main(
     if n_jobs > 1:
         # Create panoptic maps for every directory in parallel
         job_fn = functools.partial(
-            _create_panoptic_maps_for_scan,
+            create_panoptic_maps_for_scan,
             remove_semantic_and_instance=remove_semantic_and_instance,
             compress=compress,
         )
@@ -214,7 +214,7 @@ def _main(
             p.map(job_fn, scan_dir_paths)
     else:
         for scan_dir_path in scan_dir_paths:
-            _create_panoptic_maps_for_scan(
+            create_panoptic_maps_for_scan(
                 scan_dir_path=scan_dir_path,
                 remove_semantic_and_instance=remove_semantic_and_instance,
                 compress=compress,

@@ -9,9 +9,9 @@ from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import evaluation.panoptic_mapping.pointcloud as pcd_utils
+from tools.create_scannet_panoptic_maps import create_panoptic_maps_for_scan
 from utils.pano_seg import match_and_remap_panoptic_labels
-from utils.visualization import colorize_panoptic_labels
-from utils.common import NYU40_COLOR_PALETTE, NYU40_IGNORE_LABEL
+from utils.common import NYU40_IGNORE_LABEL
 
 
 def compute_vertex_map(depth_map, depth_intrinsic):
@@ -30,14 +30,13 @@ def compute_vertex_map(depth_map, depth_intrinsic):
 
 def main(
     scan_dir_path: Path,
-    out_dir_path: Optional[Path] = None,
 ):
     assert scan_dir_path.is_dir()
 
-    if out_dir_path is None:
-        out_dir_path = scan_dir_path / "panoptic_temp_cons"
-
-    out_dir_path.mkdir(parents=True, exist_ok=True)
+    # First create panoptic maps
+    create_panoptic_maps_for_scan(
+        scan_dir_path, remove_semantic_and_instance=True, compress=False
+    )
 
     pano_seg_dir_path = scan_dir_path / "panoptic"
     assert pano_seg_dir_path.is_dir()
@@ -68,19 +67,8 @@ def main(
     gt_pano_pcd_file_path = scan_dir_path / (scan_dir_path.name + ".pointcloud.ply")
     gt_points, gt_labels = pcd_utils.load_labeled_pointcloud(gt_pano_pcd_file_path)
 
-    # Create color map
-    color_map = dict(
-        zip(
-            np.unique(gt_labels),
-            colorize_panoptic_labels(np.unique(gt_labels), NYU40_COLOR_PALETTE)[0],
-        )
-    )
-
     # Initialize kdtree for label lookups
     kdtree = KDTree(data=gt_points)
-
-    colored_pano_seg_dir_path = out_dir_path / "colored"
-    colored_pano_seg_dir_path.mkdir(exist_ok=True)
 
     for pano_seg_file_path in tqdm(sorted(pano_seg_dir_path.glob("*.png"))):
         # Load panoptic segmentation
@@ -133,22 +121,8 @@ def main(
             ignore_unmatched=True,
         )
 
-        # Save the result
-        Image.fromarray(remapped_pano_seg).save(out_dir_path / pano_seg_file_path.name)
-
-        # Also save RGB rendered panoptic seg
-        colored_pano_seg = np.zeros(
-            (remapped_pano_seg.shape[0], remapped_pano_seg.shape[1], 3),
-            dtype=np.uint8,
-        )
-        for id in np.unique(remapped_pano_seg):
-            try:
-                colored_pano_seg[remapped_pano_seg == id] = color_map[id]
-            except KeyError:
-                pass
-        Image.fromarray(colored_pano_seg).save(
-            colored_pano_seg_dir_path / pano_seg_file_path.name
-        )
+        # Save the result (overwrite previously create panoptic map)
+        Image.fromarray(remapped_pano_seg).save(pano_seg_file_path)
 
 
 def _parse_args():
@@ -163,20 +137,9 @@ def _parse_args():
         help="Path to the scan directory.",
     )
 
-    parser.add_argument(
-        "-o",
-        "--out-dir",
-        default=None,
-        type=lambda p: Path(p).absolute(),
-        help="Path to the output dir.",
-    )
-
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    main(
-        args.scan_dir,
-        args.out_dir,
-    )
+    main(args.scan_dir)
