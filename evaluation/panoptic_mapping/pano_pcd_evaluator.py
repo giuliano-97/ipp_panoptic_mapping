@@ -31,7 +31,7 @@ class PanopticPointcloudEvaluator:
 
         # Pre-compute max grid coord
         self.max_grid_coord = (
-            np.ceil(np.max(self.gt_points_gc, axis=0)).astype(np.int32) + 1
+            np.ceil(np.max(self.gt_points_gc, axis=0) + 1).astype(np.int32)
         )
 
     def evaluate(self, pred_points, pred_labels, coverage_points=None):
@@ -39,7 +39,7 @@ class PanopticPointcloudEvaluator:
         pred_points_gc = pcd_utils.convert_points_to_grid_coordinates(
             pred_points,
             self.w2g_transform,
-            self.max_grid_coord,
+            self.max_grid_coord - 1,
         )
 
         # Create grid with predicted labels
@@ -55,7 +55,7 @@ class PanopticPointcloudEvaluator:
             coverage_points_gc = pcd_utils.convert_points_to_grid_coordinates(
                 coverage_points,
                 self.w2g_transform,
-                self.max_grid_coord,
+                self.max_grid_coord - 1,
             )
             coverage_grid = pcd_utils.make_occupancy_grid(
                 coverage_points_gc, self.max_grid_coord

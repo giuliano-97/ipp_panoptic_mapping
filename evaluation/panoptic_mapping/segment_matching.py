@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Mapping, Dict, Set, Optional
 
 import numpy as np
-from .constants import TP_IOU_THRESHOLD, SEGMENT_MIN_NUM_VOXELS
+from evaluation.panoptic_mapping.constants import TP_IOU_THRESHOLD, SEGMENT_MIN_NUM_VOXELS
 from utils.common import NYU40_NUM_CLASSES, NYU40_IGNORE_LABEL, PANOPTIC_LABEL_DIVISOR
 
 

@@ -15,20 +15,16 @@ def _find_runs(runs_dir_path: Path) -> List[Path]:
             continue
         if len(list(p.glob("*.pointcloud.ply"))) > 0:
             run_dirs.append(p)
-    return run_dirs
+    
+    return sorted(run_dirs, reverse=True)
 
 
 def evaluate_and_compare_runs(
-    scan_dir_path: Path,
+    gt_pointcloud_file_path: Path,
     runs_dir_path: Path,
     overwrite: bool,
 ):
-    assert scan_dir_path.is_dir()
-
-    gt_pointcloud_file_path = next(scan_dir_path.glob("*.pointcloud.ply"), None)
-    if gt_pointcloud_file_path is None:
-        logging.warning("Groundtruth scan data dir has no panoptic labeled pointcloud!")
-        exit(1)
+    assert gt_pointcloud_file_path.is_file()
 
     run_dirs = _find_runs(runs_dir_path)
     if len(run_dirs) == 0:
@@ -43,17 +39,10 @@ def evaluate_and_compare_runs(
         if not overwrite and metrics_file_path.is_file():
             metrics_df = pd.read_csv(str(metrics_file_path), index_col="FrameID")
         else:
-            try:
-                metrics_df = evaluate_run(
-                    run_dir_path=run_dir_path,
-                    gt_pointcloud_file_path=gt_pointcloud_file_path,
-                )
-            except Exception as e:
-                logging.error(
-                    f"Run {run_dir_path.name} could not be evaluated: {str(e)}."
-                    "Skipped."
-                )
-                continue
+            metrics_df = evaluate_run(
+                run_dir_path=run_dir_path,
+                gt_pointcloud_file_path=gt_pointcloud_file_path,
+            )
 
             if metrics_df is None:
                 logging.warning(
@@ -92,7 +81,7 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "--scan-dir",
+        "--gt-pointcloud-file",
         required=True,
         type=lambda p: Path(p).absolute(),
         help="Path to the directory containing the groundtruth scan data.",
@@ -110,7 +99,7 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
     evaluate_and_compare_runs(
-        scan_dir_path=args.scan_dir,
+        gt_pointcloud_file_path=args.gt_pointcloud_file,
         runs_dir_path=args.runs_dir,
         overwrite=args.overwrite,
     )

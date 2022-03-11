@@ -6,6 +6,7 @@ import pandas as pd
 
 import pointcloud as pcd_utils
 from pano_pcd_evaluator import PanopticPointcloudEvaluator
+from utils.common import NYU40_NUM_CLASSES
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,6 +35,9 @@ def evaluate_run(
         pred_points, pred_labels = pcd_utils.load_labeled_pointcloud(
             pred_pointcloud_file_path
         )
+
+        # Make sure no invalid labels are there
+        pred_labels[pred_labels > (NYU40_NUM_CLASSES - 1) * 1000] = 0
 
         coverage_pcd_file_path = pred_pointcloud_file_path.parent / (
             name + ".coverage.ply"
