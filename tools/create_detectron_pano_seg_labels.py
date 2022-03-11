@@ -57,7 +57,7 @@ def main(pano_seg_dir_path: Path, detectron_labels_dir_path: Path):
                 continue
 
             if class_id in NYU40_STUFF_CLASSES:
-                id_image[pano_seg_gt == id] == class_id
+                id_image[pano_seg_gt == id] = class_id
                 segments_info.append(
                     make_detectron_stuff_label(
                         class_id,
