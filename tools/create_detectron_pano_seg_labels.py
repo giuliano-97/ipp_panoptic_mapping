@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from tqdm import tqdm
 
 from utils.common import (
     PANOPTIC_LABEL_DIVISOR,
@@ -45,7 +46,7 @@ def main(pano_seg_dir_path: Path, detectron_labels_dir_path: Path):
     assert pano_seg_dir_path.is_dir()
     detectron_labels_dir_path.mkdir(exist_ok=True)
 
-    for pano_seg_gt_file_path in pano_seg_dir_path.glob("*.png"):
+    for pano_seg_gt_file_path in tqdm(sorted(pano_seg_dir_path.glob("*.png"))):
         pano_seg_gt = np.array(Image.open(pano_seg_gt_file_path))
 
         id_image = np.zeros_like(pano_seg_gt)
