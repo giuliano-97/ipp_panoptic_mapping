@@ -1,9 +1,8 @@
 import argparse
 import logging
-import shutil
 import zipfile
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Dict, List
 
 import numpy as np
 import open3d as o3d
@@ -15,6 +14,8 @@ import evaluation.panoptic_mapping.pointcloud as pcd_utils
 from tools.create_scannet_panoptic_maps import create_panoptic_maps_for_scan
 from utils.pano_seg import match_and_remap_panoptic_labels
 from utils.common import NYU40_IGNORE_LABEL, NYU40_STUFF_CLASSES, PANOPTIC_LABEL_DIVISOR
+
+logging.basicConfig(level=logging.INFO)
 
 
 _SEMANTIC_MAPS_ARCHIVE_SUFFIX = "_2d-label-filt.zip"
@@ -175,11 +176,20 @@ def main(
             Image.fromarray(pano_seg).resize((640, 480), resample=Image.NEAREST)
         )
         if np.all(pano_seg == 0):
-            raise ValueError(f"Frame {pano_seg_file_path.stem} is invalid!")
+            logging.error(
+                f"Frame {pano_seg_file_path.stem} is invalid: empty panoptic map."
+                "Skipped."
+            )
+            continue
 
         # Load gt pose
         pose_file_path = pose_dir_path / (pano_seg_file_path.stem + ".txt")
         pose = np.loadtxt(str(pose_file_path))
+        if np.any(np.logical_or(np.isinf(pose), np.isnan(pose))):
+            logging.error(
+                f"Frame {pano_seg_file_path.stem} is invalid: invalid pose. Skipped."
+            )
+            continue
 
         # Create pinhole camera rays
         rays = o3d.t.geometry.RaycastingScene.create_rays_pinhole(
