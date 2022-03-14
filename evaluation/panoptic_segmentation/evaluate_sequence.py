@@ -121,7 +121,7 @@ def _parse_args():
     )
 
     parser.add_argument(
-        "--output_dir",
+        "--output-dir",
         type=lambda p: Path(p).absolute(),
         required=True,
     )
