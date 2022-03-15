@@ -1,4 +1,6 @@
 import argparse
+from cProfile import label
+from genericpath import exists
 import logging
 import zipfile
 from pathlib import Path
@@ -11,9 +13,9 @@ from scipy.spatial import KDTree
 from tqdm import tqdm
 
 import evaluation.panoptic_mapping.pointcloud as pcd_utils
-from tools.create_scannet_panoptic_maps import create_panoptic_maps_for_scan
 from utils.pano_seg import match_and_remap_panoptic_labels
-from utils.common import NYU40_IGNORE_LABEL, NYU40_STUFF_CLASSES, PANOPTIC_LABEL_DIVISOR
+from utils.common import NYU40_COLOR_PALETTE, NYU40_IGNORE_LABEL, NYU40_STUFF_CLASSES, PANOPTIC_LABEL_DIVISOR
+from utils.visualization import colorize_panoptic_labels
 
 logging.basicConfig(level=logging.INFO)
 
@@ -91,6 +93,12 @@ def _encode_panoptic(
     return panoptic_map.astype(np.int32)
 
 
+def _get_labels_colormap(labels):
+    labels_unique = np.unique(labels)
+    colors, _ = colorize_panoptic_labels(labels_unique, NYU40_COLOR_PALETTE)
+    return dict(zip(labels_unique, colors))
+
+
 def main(
     scan_dir_path: Path,
 ):
@@ -121,12 +129,15 @@ def main(
     # Load labeled pcd pointcloud
     gt_pano_pcd_file_path = scan_dir_path / (scan_dir_path.name + ".pointcloud.ply")
     gt_points, gt_labels = pcd_utils.load_labeled_pointcloud(gt_pano_pcd_file_path)
+    labels_colormap = _get_labels_colormap(gt_labels)
 
     # Initialize kdtree for label lookups
     kdtree = KDTree(data=gt_points)
 
     pano_seg_dir_path = scan_dir_path / _PANOPTIC_MAPS_DIR_NAME
     pano_seg_dir_path.mkdir(exist_ok=True)
+    colored_dir_path = pano_seg_dir_path / "colored"
+    colored_dir_path.mkdir(exist_ok=True)
 
     semantic_maps_dir_path = scan_dir_path / _SEMANTIC_MAPS_DIR_NAME
     instance_maps_dir_path = scan_dir_path / _INSTANCE_MAPS_DIR_NAME
@@ -228,10 +239,22 @@ def main(
             proj_pano_seg,
             pano_seg,
             ignore_unmatched=True,
+            match_threshold=0.5,
         )
 
         # Save the result
         Image.fromarray(remapped_pano_seg).save(pano_seg_file_path)
+
+        # Color remapped pano seg
+        colored_remapped_pano_seg = np.zeros(
+            (remapped_pano_seg.shape[0], remapped_pano_seg.shape[1], 3),
+            dtype=np.uint8
+        )
+        for id in np.unique(remapped_pano_seg):
+            colored_remapped_pano_seg[remapped_pano_seg == id] = labels_colormap[id]
+        Image.fromarray(colored_remapped_pano_seg).save(
+            colored_dir_path / pano_seg_file_path.name
+        )
 
 
 def _parse_args():

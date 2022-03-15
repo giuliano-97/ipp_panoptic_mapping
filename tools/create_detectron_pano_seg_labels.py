@@ -1,6 +1,7 @@
 import argparse
 import json
 from pathlib import Path
+from matplotlib import use
 
 import numpy as np
 from PIL import Image
@@ -52,12 +53,15 @@ def main(pano_seg_dir_path: Path, detectron_labels_dir_path: Path):
         id_image = np.zeros_like(pano_seg_gt)
         segments_info = []
         ids, areas = np.unique(pano_seg_gt, return_counts=True)
+        used_ids = set()
         for id, area in zip(ids, areas):
             class_id = id // PANOPTIC_LABEL_DIVISOR
             if class_id == NYU40_IGNORE_LABEL:
                 continue
 
             if class_id in NYU40_STUFF_CLASSES:
+                assert class_id not in used_ids
+                used_ids.add(class_id)
                 id_image[pano_seg_gt == id] = class_id
                 segments_info.append(
                     make_detectron_stuff_label(
@@ -68,6 +72,8 @@ def main(pano_seg_dir_path: Path, detectron_labels_dir_path: Path):
                 )
             else:
                 instance_id = id % PANOPTIC_LABEL_DIVISOR
+                assert instance_id not in used_ids
+                used_ids.add(instance_id)
                 id_image[pano_seg_gt == id] = instance_id
                 segments_info.append(
                     make_detectron_thing_label(

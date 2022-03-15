@@ -1,4 +1,4 @@
-from cv2 import remap
+
 import numpy as np
 
 from evaluation.panoptic_mapping.segment_matching import match_segments
@@ -8,6 +8,7 @@ def match_and_remap_panoptic_labels(
     src_pano_seg: np.ndarray,
     dst_pano_seg: np.ndarray,
     ignore_unmatched: bool = False,
+    match_threshold: float = 0.25,
 ) -> np.ndarray:
     assert src_pano_seg.shape == dst_pano_seg.shape
 
@@ -15,7 +16,7 @@ def match_and_remap_panoptic_labels(
     res = match_segments(
         src_pano_seg,
         dst_pano_seg,
-        match_iou_threshold=0.25,
+        match_iou_threshold=match_threshold,
         fp_min_area=0,
     )
 
@@ -30,10 +31,12 @@ def match_and_remap_panoptic_labels(
     # are no collisions with the remapped ids
     for unmatched_id in res.fps:
         mask = dst_pano_seg == unmatched_id
-        if unmatched_id not in used_ids:
+        if ignore_unmatched:
+            remapped_dst_pano_seg[mask] = 0
+        elif unmatched_id not in used_ids:
             remapped_dst_pano_seg[mask] = unmatched_id
             used_ids.add(unmatched_id)
-        elif not ignore_unmatched:
+        else:
             new_id = unmatched_id + 1
             while(new_id in used_ids):
                 new_id += 1
