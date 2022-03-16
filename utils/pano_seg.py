@@ -1,7 +1,14 @@
+from typing import List, Dict
 
 import numpy as np
 
 from evaluation.panoptic_mapping.segment_matching import match_segments
+from utils.common import (
+    NYU40_THING_CLASSES,
+    NYU40_STUFF_CLASSES,
+    NYU40_IGNORE_LABEL,
+    PANOPTIC_LABEL_DIVISOR,
+)
 
 
 def match_and_remap_panoptic_labels(
@@ -38,9 +45,35 @@ def match_and_remap_panoptic_labels(
             used_ids.add(unmatched_id)
         else:
             new_id = unmatched_id + 1
-            while(new_id in used_ids):
+            while new_id in used_ids:
                 new_id += 1
             remapped_dst_pano_seg[mask] = new_id
             used_ids.add(new_id)
-    
+
     return remapped_dst_pano_seg
+
+
+def create_segments_info(panoptic_pred: np.ndarray) -> List[Dict]:
+    segment_ids, areas = np.unique(panoptic_pred, return_counts=True)
+    segments_info = []
+    for segment_id, area in zip(segment_ids, areas):
+        if segment_id == NYU40_IGNORE_LABEL:
+            continue
+        class_id = segment_id // PANOPTIC_LABEL_DIVISOR
+
+        info = {
+            "id": int(segment_id),
+            "category_id": int(class_id),
+            "area": int(area),
+        }
+
+        if class_id in NYU40_STUFF_CLASSES:
+            info["isthing"] = False
+        elif class_id in NYU40_THING_CLASSES:
+            instance_id = segment_id % PANOPTIC_LABEL_DIVISOR
+            info["isthing"] = True
+            info["instance_id"] = instance_id
+
+        segments_info.append(info)
+
+    return segments_info
